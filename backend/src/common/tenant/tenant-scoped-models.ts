@@ -1,0 +1,21 @@
+/** Prisma models that MUST always be filtered/stamped with tenantId. */
+export const TENANT_SCOPED_MODELS = new Set([
+  'User',
+  'Store',
+  'TenantSetting',
+  'Category',
+  'Product',
+  'Cart',
+  'CartItem',
+  'Sale',
+  'SaleLine',
+  'CashierShift',
+  'SupervisorAction',
+  'Employee',
+  'WorkShift',
+  'Attendance',
+  'PayrollSlip',
+  'DailySalesSummary',
+  'DailyProductSummary',
+  'ActivityLog',
+]);

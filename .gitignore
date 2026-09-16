@@ -1,0 +1,15 @@
+node_modules/
+dist/
+dist-ssr/
+*.local
+.DS_Store
+.env
+.env.cloud
+.env.onprem
+coverage/
+.idea/
+.vscode/
+*.log
+backend/generated/
+frontend/dist/
+.prisma/

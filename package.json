@@ -1,0 +1,24 @@
+{
+  "name": "bonpos",
+  "private": true,
+  "version": "0.1.0",
+  "description": "BonPOS — multi-tenant POS platform (cloud SaaS and on-premises)",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev:api": "npm run start:dev --workspace backend",
+    "dev:web": "npm run dev --workspace frontend",
+    "db:migrate": "npm run prisma:migrate --workspace backend",
+    "db:seed": "npm run prisma:seed --workspace backend",
+    "test": "npm run test --workspace backend",
+    "compose:up": "docker compose up -d --build",
+    "compose:desktop": "docker compose -f docker-compose.yml -f docker-compose.desktop.yml up -d --build",
+    "compose:down": "docker compose down",
+    "compose:onprem": "docker compose -f docker-compose.yml -f docker-compose.onprem.yml up -d --build"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

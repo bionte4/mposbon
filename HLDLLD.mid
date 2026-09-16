@@ -1,0 +1,117 @@
+**High-Level Design (HLD) & Low-Level Design (LLD)**
+
+---
+
+### **High-Level Design (HLD)**
+
+Arsitektur tingkat tinggi menggunakan pola **Decoupled Full-Stack Architecture** yang mendukung mode *multi-tenancy*, fleksibilitas *deployment* (On-Cloud / SaaS atau On-Premises via Docker), serta mekanisme *offline-first*.
+
+#### **1. Komponen Arsitektur Utama**
+
+* **Frontend SPA (Client-Side):** Dibangun menggunakan TypeScript, Vue.js/React, TailwindCSS, dan Vite, dikemas sebagai **Progressive Web App (PWA)** agar dapat berjalan ringan di Desktop, Tablet, maupun Mobile Phone.
+* **Backend API (Server-Side):** Dibangun menggunakan TypeScript (NestJS/Express) atau PHP (Laravel) untuk memproses logika bisnis, mutasi inventaris, dan validasi transaksi.
+* **Database Layer:**
+* **Central Database:** PostgreSQL / MySQL untuk data lintas tenant, produk, dan laporan terpusat.
+* **Local/Edge Storage:** IndexedDB (Dexie.js) di sisi peramban perangkat kasir untuk mendukung operasi *offline-first*.
+
+
+
+#### **2. Diagram Alir Sistem (High-Level Flow)**
+
+```text
+[ Perangkat Kasir / Tablet / Mobile ] (PWA + IndexedDB)
+       │ (REST API / HTTPS via Separate Subdomain: api.domain.com)
+       ▼
+[ Nginx Reverse Proxy / Load Balancer ]
+       │
+       ▼
+[ Backend API (Node.js / Laravel) ]
+       ├──> [ Multi-Tenant Isolation Middleware ]
+       ├──> [ Central Database (PostgreSQL / MySQL) ]
+       └──> [ HRIS & Payroll Service Engine ]
+
+```
+
+---
+
+### **Low-Level Design (LLD)**
+
+Desain tingkat rendah merinci struktur basis data, modul fungsional, dan skema sinkronisasi data.
+
+#### **1. Skema Basis Data Inti (Database Schema)**
+
+* **Tabel `tenants` (Multi-Tenancy)**
+* `id` (UUID, Primary Key)
+* `name` (VARCHAR)
+* `domain` (VARCHAR)
+* `created_at` (TIMESTAMP)
+
+
+* **Tabel `products` (Katalog Produk)**
+* `id` (UUID, Primary Key)
+* `tenant_id` (UUID, Foreign Key)
+* `name` (VARCHAR)
+* `price_in_cents` (INTEGER) — *Mencegah float error*
+* `stock_qty` (INTEGER)
+
+
+* **Tabel `transactions` (Penjualan / POS)**
+* `id` (UUID, Primary Key)
+* `tenant_id` (UUID, Foreign Key)
+* `cashier_id` (UUID, Foreign Key)
+* `total_amount_in_cents` (INTEGER)
+* `payment_method` (VARCHAR)
+* `status` (VARCHAR: *completed, voided, synced*)
+* `created_at` (TIMESTAMP)
+
+
+* **Tabel `attendances` & `shifts` (Modul HRIS)**
+* `id` (UUID, Primary Key)
+* `employee_id` (UUID, Foreign Key)
+* `clock_in` (TIMESTAMP)
+* `clock_out` (TIMESTAMP)
+* `shift_type` (VARCHAR: *pagi, malam*)
+
+
+
+#### **2. Modul Fungsional & Logika Bisnis**
+
+* **Modul Offline Sync Queue:**
+* Menggunakan Dexie.js di Frontend untuk menampung transaksi lokal saat koneksi terputus. Saat koneksi pulih, antrean data dikirim secara asinkron ke endpoint `/api/v1/sync` dengan mekanisme *conflict resolution* berbasis *timestamp*.
+
+
+* **Modul Keamanan & RBAC:**
+* Middleware backend memvalidasi JWT Token. Aksi sensitif seperti pembatalan (*void*) transaksi atau pembukaan laci kasir wajib menyertakan verifikasi `supervisor_pin` yang dikirim ke endpoint `/api/v1/pos/verify-supervisor`.
+
+
+
+#### **3. Konfigurasi Deployment (Docker Compose LLD)**
+
+Menyatukan seluruh layanan agar mudah dijalankan secara *on-cloud* maupun *on-premise*:
+
+```yaml
+version: '3.8'
+services:
+  backend-api:
+    build: ./backend
+    environment:
+      - DB_CONNECTION=pgsql
+      - DB_HOST=postgres-db
+    ports:
+      - "5000:5000"
+    depends_on:
+      - postgres-db
+  
+  postgres-db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=pos_enterprise
+      - POSTGRES_USER=db_user
+      - POSTGRES_PASSWORD=secure_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
+
+```

@@ -1,0 +1,30 @@
+# Overlay for on-premises / edge mini-PC.
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.onprem.yml up -d --build
+#
+# Locks single tenant, offline license grace, enables edge sync.
+# Exposes only the gateway on LAN (API/SPA ports stay loopback-friendly defaults).
+
+services:
+  api:
+    environment:
+      DEPLOYMENT_MODE: onprem
+      LICENSE_VALIDATION_MODE: offline
+      FEATURE_EDGE_SYNC: "true"
+      FEATURE_HRIS: ${FEATURE_HRIS:-true}
+      DEFAULT_TENANT_SLUG: ${DEFAULT_TENANT_SLUG:-onprem-store}
+      # Same-origin via gateway + LAN SPA if tablets hit :8080
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost,http://127.0.0.1,http://localhost:8080,http://127.0.0.1:8080}
+
+  web:
+    build:
+      args:
+        VITE_DEPLOYMENT_MODE: onprem
+        VITE_API_URL: ${VITE_API_URL:-/api/v1}
+        VITE_DEFAULT_TENANT_SLUG: ${DEFAULT_TENANT_SLUG:-onprem-store}
+
+  # Prefer a single LAN port for POS terminals / tablets
+  gateway:
+    ports:
+      - "${GATEWAY_PORT:-80}:80"

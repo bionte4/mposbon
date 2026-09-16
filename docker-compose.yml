@@ -1,0 +1,136 @@
+# =============================================================================
+# BonPOS — one-command stack (cloud SaaS or on-prem mini-PC)
+#
+# Docker Desktop (recommended on Mac):
+#   1. Ensure Docker Desktop is running
+#   2. cp .env.example .env
+#   3. docker compose -f docker-compose.yml -f docker-compose.desktop.yml up -d --build
+#      or: npm run compose:desktop
+#   4. Open http://localhost:9088  (gateway: SPA + /api)
+#
+# Production-like defaults (ports 80 / 3000 / 8080 / 5432):
+#   docker compose up -d --build
+#
+# On-premises overlay:
+#   docker compose -f docker-compose.yml -f docker-compose.onprem.yml up -d --build
+#
+# Entry points (desktop overlay):
+#   Gateway:  http://localhost:9088
+#   Direct SPA: http://localhost:9080
+#   Direct API: http://localhost:9300/api/v1
+#   Postgres: localhost:5433 (host tools only; containers use hostname `postgres`)
+# =============================================================================
+
+name: bonpos
+
+networks:
+  bonpos:
+    driver: bridge
+
+volumes:
+  bonpos_pgdata:
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    networks: [bonpos]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-bonpos}
+      POSTGRES_USER: ${POSTGRES_USER:-bonpos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bonpos}
+      POSTGRES_APP_USER: ${POSTGRES_APP_USER:-bonpos_app}
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:-bonpos_app}
+    # Host bind is optional for app runtime (api talks to `postgres:5432` on the bridge).
+    # Override with POSTGRES_HOST_PORT / desktop overlay if 5432 is taken locally.
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
+    volumes:
+      - bonpos_pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bonpos} -d ${POSTGRES_DB:-bonpos}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    networks: [bonpos]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-cloud}
+      APP_PORT: "3000"
+      # Allowlist: gateway origin + direct SPA ports (dev / debugging)
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+      API_URL: ${API_URL:-http://localhost}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost,http://localhost:8080,http://localhost:5173,http://127.0.0.1,http://127.0.0.1:8080,http://127.0.0.1:5173,http://localhost:9088,http://localhost:9080,http://127.0.0.1:9088,http://127.0.0.1:9080}
+      # Inside the compose network always use service hostname `postgres` (not localhost).
+      DATABASE_URL: postgresql://${POSTGRES_APP_USER:-bonpos_app}:${POSTGRES_APP_PASSWORD:-bonpos_app}@postgres:5432/${POSTGRES_DB:-bonpos}?schema=public
+      DATABASE_MIGRATE_URL: postgresql://${POSTGRES_USER:-bonpos}:${POSTGRES_PASSWORD:-bonpos}@postgres:5432/${POSTGRES_DB:-bonpos}?schema=public
+      DEFAULT_TENANT_SLUG: ${DEFAULT_TENANT_SLUG:-onprem-store}
+      DEFAULT_TENANT_ID: ${DEFAULT_TENANT_ID:-}
+      TENANT_HOST_BASE: ${TENANT_HOST_BASE:-bonpos.local}
+      LICENSE_VALIDATION_MODE: ${LICENSE_VALIDATION_MODE:-online}
+      LICENSE_KEY: ${LICENSE_KEY:-}
+      LICENSE_OFFLINE_GRACE_HOURS: ${LICENSE_OFFLINE_GRACE_HOURS:-72}
+      FEATURE_EDGE_SYNC: ${FEATURE_EDGE_SYNC:-false}
+      FEATURE_HRIS: ${FEATURE_HRIS:-true}
+      FEATURE_OFFLINE_POS: ${FEATURE_OFFLINE_POS:-true}
+      RUN_DB_SEED: ${RUN_DB_SEED:-true}
+      SEED_SUPERVISOR_PIN: ${SEED_SUPERVISOR_PIN:-1234}
+    ports:
+      - "${API_HOST_PORT:-3000}:3000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/v1/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 50s
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Relative URL works behind gateway (same origin → no CORS needed for SPA)
+        VITE_API_URL: ${VITE_API_URL:-/api/v1}
+        VITE_DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-cloud}
+        VITE_DEFAULT_TENANT_SLUG: ${DEFAULT_TENANT_SLUG:-onprem-store}
+    restart: unless-stopped
+    networks: [bonpos]
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${WEB_HOST_PORT:-8080}:80"
+
+  # Recommended public entry: SPA + /api reverse proxy
+  gateway:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    networks: [bonpos]
+    depends_on:
+      web:
+        condition: service_started
+      api:
+        condition: service_healthy
+    ports:
+      - "${GATEWAY_PORT:-80}:80"
+    volumes:
+      - ./docker/gateway/nginx.conf:/etc/nginx/conf.d/default.conf:ro

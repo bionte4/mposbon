@@ -1,0 +1,56 @@
+Prompt 1:
+Halo! Berdasarkan aturan di .cursorrules, tolong analisis struktur folder codebase saat ini menggunakan @Codebase. Setelah itu, buatkan arsitektur multi-tenancy dasar menggunakan kolom `tenant_id` (atau skema database yang mendukung isolasi data antar tenant) dan pastikan ada konfigurasi environment via .env untuk mendukung mode deployment On-Cloud maupun On-Premises (Docker).
+
+Prompt 2
+Mari kita fokus pada modul Point of Sales (POS). 
+1. Buat migrasi database untuk tabel produk, kategori, keranjang, dan transaksi (penjualan). Pastikan semua nilai moneter (harga, total, pajak) disimpan sebagai INTEGER (dalam satuan terkecil/sen) untuk menghindari floating-point error.
+2. Rancang struktur service/store di Frontend (TypeScript/Vue/React) yang mengintegrasikan IndexedDB (Dexie.js) agar aplikasi POS tetap bisa menyimpan data keranjang dan transaksi secara lokal saat offline, serta menyiapkan antrean sinkronisasi (sync queue) saat online kembali.
+
+Prompt 3
+Sekarang tambahkan lapisan keamanan dan manajemen shift kasir:
+1. Terapkan Middleware Role-Based Access Control (RBAC) di Backend dan Frontend. Pastikan aksi sensitif seperti void item, diskon manual, atau pembukaan laci kasir secara paksa wajib memvalidasi Supervisor PIN / hak akses khusus.
+2. Buat fitur manajemen Shift Kasir (Clock-in / Clock-out) yang terhubung langsung dengan sesi login kasir, sehingga laporan penutupan kasir (Z-Report / Cash Drawer Reconciliation) tercatat akurat berdasarkan kasir yang bertugas.
+3. Tambahkan fungsi helper ESC/POS di Frontend untuk memformat pencetakan struk struk belanja ke printer thermal.
+
+Prompt 4
+Selanjutnya, kita akan menambahkan modul HRIS (Human Resource Information System) dasar yang terhubung dengan sistem:
+1. Buat tabel dan API untuk manajemen data karyawan, pencatatan absensi harian (kehadiran), dan manajemen shift kerja.
+2. Buat struktur service class terpisah untuk perhitungan penggajian (Payroll) yang mengakomodasi logika dasar lembur (overtime) dan pajak penghasilan lokal (seperti referensi PPh 21) menggunakan fungsi terisolasi, bukan hardcode.
+3. Pastikan kasir biasa tidak memiliki akses ke menu atau data HRIS/Payroll (dibatasi oleh RBAC).
+
+Prompt 5
+Tahap terakhir adalah pembuatan Dashboard Analitik:
+1. Buat halaman Dashboard interaktif menggunakan komponen grafik (Chart.js / Recharts) untuk menampilkan metrik real-time: Gross Sales, Net Sales, Jumlah Transaksi, Average Order Value (AOV), dan Produk Terlaris.
+2. Tambahkan widget khusus ringkasan shift kasir, selisih kas laci (cash discrepancy), dan laporan rekap harian (Z-Report).
+3. Buat query backend yang dioptimalkan dengan indexing atau summary tables agar analitik dashboard tidak membebani database operasional kasir saat jam sibuk.
+
+Prompt 6
+Mari kita perkuat keandalan dan keamanan sistem:
+1. Terapkan Global Error Handling di Backend dan Error Boundary/Toast Notifications di Frontend agar aplikasi tidak freeze saat terjadi kegagalan API atau putus koneksi.
+2. Buat sistem Audit Trail / Activity Logging di Backend untuk mencatat seluruh tindakan sensitif (seperti pembatalan transaksi/void, perubahan harga manual, hapus item, atau login supervisor) beserta timestamp dan ID user-nya.
+3. Buat unit test atau integration test dasar untuk modul perhitungan keranjang belanja dan transaksi guna memastikan tidak ada selisih angka (integer math validation).
+
+Prompt 7
+Tahap terakhir adalah penyiapan containerization untuk deployment:
+1. Buat `Dockerfile` yang optimal untuk Frontend (multi-stage build untuk Vue/React SPA) dan Backend (Node.js/Laravel).
+2. Buat file `docker-compose.yml` di root direktori yang menyatukan layanan: Backend API, Frontend (atau Nginx proxy), Central Database (PostgreSQL/MySQL), dan environment variables (.env.example) sehingga sistem ini bisa langsung dijalankan dengan satu perintah `docker-compose up -d` baik di server cloud (AWS/GCP) maupun di mini-PC lokal (on-premise).
+3. Konfigurasikan CORS di Backend agar hanya mengizinkan akses dari domain Frontend yang sah.
+
+Prompt 8
+Sekarang kita akan membangun dan merapikan antarmuka Frontend berdasarkan aturan UI/UX dan Localization:
+1. Buat halaman POS (Kasir) menggunakan TailwindCSS dengan desain yang sangat ramah sentuhan (touch-friendly), tombol aksi pembayaran dan produk berukuran besar, serta alur kerja cepat (minimal klik).
+2. Rancang halaman Dashboard dan HRIS yang bersih, responsif, dan menyertakan komponen grafik/tabel yang rapi.
+3. Terapkan struktur file i18n (localization) terpusat (misalnya untuk Bahasa Indonesia dan Inggris) sehingga seluruh teks tombol, label form, dan pesan sistem tidak di-hardcode di dalam komponen.
+4. Buat fungsi helper pemformatan mata uang secara dinamis (contoh: format Rupiah dengan pemisah ribuan yang rapi tanpa float error).
+
+Prompt 9
+Tahap akhir adalah optimalisasi lintas perangkat dan performa:
+1. Konfigurasikan aplikasi Frontend sebagai Progressive Web App (PWA) dengan service worker agar bisa di-install layaknya aplikasi native, ringan, dan tetap responsif saat dibuka di Desktop, Tablet, maupun Mobile Phone.
+2. Pastikan seluruh komponen UI menggunakan desain responsif TailwindCSS yang beradaptasi dengan mulus pada layar kecil (mobile) hingga layar sentuh besar (POS terminal).
+3. Optimalkan manajemen state lokal (IndexedDB) agar tidak membebani memori browser di perangkat mobile/tablet saat melakukan sinkronisasi data transaksi.
+
+Prompt 10
+Mari kita sempurnakan ketahanan sistem pada skenario offline dan sinkronisasi data:
+1. Buat mekanisme background sync menggunakan Service Worker dan Dexie.js di Frontend yang otomatis mendeteksi perubahan status jaringan (online/offline).
+2. Implementasikan antrean sinkronisasi (sync queue) di sisi klien dengan menyertakan UUID unik dan timestamp pada setiap transaksi lokal untuk menghindari duplikasi data saat koneksi pulih.
+3. Buat logika *conflict resolution* di Backend API (misalnya: *last-write-wins* atau validasi stok real-time) untuk menangani kasus di mana stok barang berubah di server pusat saat kasir sedang offline.

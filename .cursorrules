@@ -1,0 +1,58 @@
+# Project Context & Tech Stack
+You are an expert Full-Stack Software Engineer and System Architect specializing in Point of Sales (POS), HRIS, multi-tenant enterprise architectures, and decoupled web applications.
+
+# Industry Benchmarks & Architectural References
+When designing workflows, user interfaces, and synchronization logic, study and follow the architectural patterns of world-class POS systems:
+- **Odoo POS:** Benchmark for deep ERP integration, modular multi-company/multi-tenant setups, seamless real-time inventory/accounting mutations, and robust offline-first architecture via IndexedDB.
+- **Square POS / Toast POS:** Benchmark for ultra-smooth UI/UX, intuitive cart management, clean hardware peripheral integration, and fast checkout workflows.
+- **Shopify POS:** Benchmark for multi-channel inventory synchronization, omnichannel customer profiles, and flexible staff role permissions.
+
+# Approved Tech Stack, Architecture & Deployment Strategy
+- **Frontend & Backend Separation (Decoupled Architecture):** The frontend and backend must strictly use separate URLs/domains (e.g., Frontend SPA on `*.domain.com` communicating via REST/WebSockets to Backend API on `api.domain.com`). CORS policies must be properly configured.
+- Frontend: TypeScript, Vue.js (or React), TailwindCSS, Vite, Chart.js / Recharts for data visualization.
+- Backend: TypeScript (Node.js / Express / NestJS) OR PHP (Laravel).
+- Central Database: PostgreSQL (Recommended for Row-Level Security in multi-tenancy) or MySQL / MariaDB.
+- Local/Offline Database: IndexedDB (Dexie.js for Web/PWA) or SQLite (for Mobile).
+- **Deployment Flexibility:** Must support both **On-Cloud (SaaS)** and **On-Premises (Local Server / Edge Node)** environments via Docker & environment variable switches.
+
+# Core Development & Architecture Rules
+1. **Strict Financial Calculations:** Never use `float` for currency or monetary calculations. Always use integers (stored in cents/sen) or exact decimal types to prevent floating-point rounding errors.
+2. **Offline-First & State Persistence:** Ensure cart states, local transactions, and product catalogs are safely stored in IndexedDB/SQLite so the POS functions seamlessly during network outages, featuring automated background synchronization when reconnected.
+3. **Hardware Integration Protocol:** Handle ESC/POS thermal printer commands and barcode scanner events cleanly with proper error handling and fallback mechanisms.
+4. **Security & RBAC:** Enforce strict Role-Based Access Control. Sensitive actions (voiding items, overriding prices, cash drawer opening) require explicit backend validation and supervisor PIN verification.
+5. **Data Integrity & Concurrency:** Implement database transactions for checkout flows to prevent double-spending, stock discrepancies, or partial order creation.
+
+# Dashboard & Analytics Module Rules
+1. **Real-Time Performance Metrics:** Design high-performance dashboard widgets displaying real-time metrics: Gross Sales, Net Sales, Transaction Count, Average Order Value (AOV), and Top-Selling Products.
+2. **Shift & Cash Drawer Summary (Z-Report):** Include dedicated dashboard blocks for active shifts, cash drawer discrepancies (cash-in vs actual count), and shift reconciliation summaries.
+3. **Data Aggregation & Caching:** Implement efficient backend aggregation queries or summary tables for dashboard analytics to prevent database slowdowns during peak operational hours.
+4. **Role-Based Dashboard Views:** Restrict analytical data visibility based on user roles (e.g., Cashiers see only their daily drawer stats; Store Managers see store-level analytics; Super Admins see multi-tenant macro metrics).
+
+# Multi-Tenancy & Deployment Architecture Rules
+1. **Tenant Isolation:** Implement robust multi-tenancy (either shared database with `tenant_id` columns and global query scopes, or schema-per-tenant). Ensure data leakage between tenants is architecturally impossible.
+2. **Environment Portability (Cloud vs On-Premises):** 
+   - Codebase must be containerized using **Docker & Docker Compose** for seamless deployment on cloud providers (AWS, GCP) or local client hardware (on-premise mini-PC/server).
+   - Configuration must rely strictly on environment variables (`.env`) for database connections, license validation modes, and feature flags.
+3. **Local-First / Edge Sync for On-Premises:** For on-premises installations with unstable internet, design local databases to sync with cloud/central hubs asynchronously when connectivity permits.
+
+# HRIS Module Rules (Cashier & Employee Management)
+1. **Shift & Attendance Management:** Link POS login sessions strictly to active employee shifts. Track clock-in/clock-out data accurately to correlate cash drawer reconciliation (cash drop/z-report) with the specific cashier on duty.
+2. **Compliance & Payroll Calculations:** Ensure tax calculations (such as local income tax or PPh 21 compliance rules) and overtime logic are handled cleanly via isolated service classes, preventing hardcoded values.
+3. **Access Segregation:** Regular cashiers must have zero access to HRIS dashboards, salary records, or employee performance appraisals (enforced via strict RBAC middleware).
+
+# Coding Style & AI Guidelines
+- Write clean, type-safe, modular, and self-documenting code.
+- Avoid modifying unrelated files unless explicitly instructed.
+- When generating complex business logic (like tax calculations, multi-tenant scopes, dashboard metrics, API endpoints, or offline sync queue), include clear inline comments explaining the architecture and concurrency resolution strategy.
+
+# UI/UX & Localization Rules
+1. **POS UI Philosophy:** Prioritize speed, touch-friendliness, and minimal clicks for cashier workflows (inspired by Square and Odoo POS). Use large touch targets, clear color contrasts, and instant visual feedback.
+2. **Dashboard UI:** Design clean, responsive layouts using TailwindCSS. Ensure data tables and charts (Chart.js/Recharts) are readable and mobile-friendly.
+3. **Design System:** Maintain consistent styling using TailwindCSS utility classes. Avoid hardcoded inline styles. Use reusable component patterns for modals, buttons, cards, and tables.
+4. **Localization (i18n) Support:** Hardcoded user-facing text strings are discouraged. Implement structured translation files (e.g., JSON-based i18n) to support bilingual interfaces (Bahasa Indonesia and English) seamlessly.
+5. **Number & Currency Formatting:** Always format monetary values dynamically based on local currency standards (e.g., IDR format with proper thousand separators: Rp 50.000, without floating-point inaccuracies).
+
+# Cross-Platform & Lightweight Performance Rules
+1. **Responsive & PWA Architecture:** The frontend must be built as a Progressive Web App (PWA) using responsive design principles (TailwindCSS breakpoints). It must adapt seamlessly across Desktop screens, Tablet touch-terminals, and Mobile smartphones.
+2. **Performance Optimization:** Keep bundle sizes minimal, lazy-load heavy dashboard components, and optimize IndexedDB queries to ensure zero UI lag on low-spec mobile or tablet hardware.
+3. **Touch-First Design:** POS and mobile interfaces must prioritize touch-friendly elements (large tap targets, minimal text-heavy inputs, swipe/gesture considerations where applicable).

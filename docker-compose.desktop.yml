@@ -1,0 +1,37 @@
+# =============================================================================
+# Docker Desktop / Mac local overlay — avoids common host port collisions.
+#
+# On this machine (and many Macs): local Postgres often owns :5432, and other
+# Desktop stacks may already use :80 / :3000 / :8080.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.desktop.yml up -d --build
+#   npm run compose:desktop
+#
+# Open: http://localhost:9088
+#
+# Note: `ports: !override` replaces base publish mappings (Compose appends
+# otherwise). Requires Docker Compose v2.24+.
+# =============================================================================
+
+services:
+  postgres:
+    ports: !override
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432"
+
+  api:
+    ports: !override
+      - "${API_HOST_PORT:-9300}:3000"
+    environment:
+      # Prefer gateway + desktop SPA origins when running via Docker Desktop
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:9088}
+      API_URL: ${API_URL:-http://localhost:9088}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:9088,http://127.0.0.1:9088,http://localhost:9080,http://127.0.0.1:9080,http://localhost:9300,http://127.0.0.1:9300}
+
+  web:
+    ports: !override
+      - "${WEB_HOST_PORT:-9080}:80"
+
+  gateway:
+    ports: !override
+      - "${GATEWAY_PORT:-9088}:80"

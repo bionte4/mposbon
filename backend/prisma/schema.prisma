@@ -1,0 +1,990 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum DeploymentMode {
+  CLOUD
+  ONPREM
+}
+
+enum TenantStatus {
+  PROVISIONING
+  ACTIVE
+  SUSPENDED
+}
+
+/// Shared-database multi-tenancy: one row per customer (SaaS) or the single
+/// locked site (on-prem). Child tables carry tenant_id + RLS.
+model Tenant {
+  id               String           @id @default(uuid()) @db.Uuid
+  slug             String           @unique
+  name             String
+  domain           String?
+  status           TenantStatus     @default(ACTIVE)
+  deploymentMode   DeploymentMode   @default(CLOUD) @map("deployment_mode")
+  licenseKeyHash   String?          @map("license_key_hash")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+  settings         TenantSetting?
+  users            User[]
+  stores           Store[]
+  categories       Category[]
+  products         Product[]
+  carts            Cart[]
+  cartItems        CartItem[]
+  sales            Sale[]
+  saleLines        SaleLine[]
+  cashierShifts    CashierShift[]
+  supervisorActions SupervisorAction[]
+  employees        Employee[]
+  workShifts       WorkShift[]
+  attendances      Attendance[]
+  payrollSlips     PayrollSlip[]
+  dailySalesSummaries    DailySalesSummary[]
+  dailyProductSummaries  DailyProductSummary[]
+  activityLogs     ActivityLog[]
+  customers        Customer[]
+  productModifierGroups ProductModifierGroup[]
+  productModifierOptions ProductModifierOption[]
+  storeStocks      StoreStock[]
+  storePrices      StorePrice[]
+  edgeSyncOutbox   EdgeSyncOutbox[]
+  edgeSyncCursors  EdgeSyncCursor[]
+  cashDrawerMovements CashDrawerMovement[]
+  salePayments     SalePayment[]
+  stockTransfers   StockTransfer[]
+  stockTransferLines StockTransferLine[]
+  suppliers        Supplier[]
+  purchaseOrders   PurchaseOrder[]
+  purchaseOrderLines PurchaseOrderLine[]
+  goodsReceipts    GoodsReceipt[]
+  goodsReceiptLines GoodsReceiptLine[]
+
+  @@map("tenants")
+}
+
+model TenantSetting {
+  tenantId         String   @id @map("tenant_id") @db.Uuid
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  currencyCode     String   @default("IDR") @map("currency_code")
+  timezone         String   @default("Asia/Jakarta")
+  edgeSyncEnabled  Boolean  @default(false) @map("edge_sync_enabled")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("tenant_settings")
+}
+
+enum StaffRole {
+  CASHIER
+  SUPERVISOR
+  MANAGER
+  TENANT_ADMIN
+  SUPER_ADMIN
+}
+
+model User {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email       String
+  displayName String    @map("display_name")
+  role        StaffRole @default(CASHIER)
+  /// scrypt hash "saltHex:hashHex" for supervisor/manager PIN. Never store plaintext.
+  pinHash     String?   @map("pin_hash")
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  carts       Cart[]
+  sales       Sale[]
+  shifts      CashierShift[]
+  authorizedActions SupervisorAction[] @relation("SupervisorActor")
+  requestedActions  SupervisorAction[] @relation("ActionRequester")
+  employeeProfile   Employee?
+  activityLogs      ActivityLog[]
+  drawerMovements   CashDrawerMovement[] @relation("DrawerMovementActor")
+  stockTransfers    StockTransfer[] @relation("StockTransferActor")
+  purchaseOrders    PurchaseOrder[] @relation("PurchaseOrderActor")
+  goodsReceipts     GoodsReceipt[] @relation("GoodsReceiptActor")
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@map("users")
+}
+
+model Store {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code        String
+  name        String
+  /// Static QRIS MPM EMVCo payload (from bank/PSP). Shown as QR at checkout.
+  qrisPayload String?  @map("qris_payload") @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  carts     Cart[]
+  sales     Sale[]
+  shifts    CashierShift[]
+  employees Employee[]
+  dailySalesSummaries DailySalesSummary[]
+  stocks    StoreStock[]
+  prices    StorePrice[]
+  edgeSyncOutbox EdgeSyncOutbox[]
+  transfersFrom StockTransfer[] @relation("TransferFromStore")
+  transfersTo   StockTransfer[] @relation("TransferToStore")
+  purchaseOrders PurchaseOrder[]
+  goodsReceipts  GoodsReceipt[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("stores")
+}
+
+enum ShiftStatus {
+  OPEN
+  CLOSED
+}
+
+enum SupervisorActionType {
+  VOID_ITEM
+  VOID_SALE
+  REFUND_SALE
+  MANUAL_DISCOUNT
+  FORCE_OPEN_DRAWER
+}
+
+/// Cashier shift session: clock-in binds POS sales; clock-out produces Z-Report.
+model CashierShift {
+  id                   String      @id @default(uuid()) @db.Uuid
+  tenantId             String      @map("tenant_id") @db.Uuid
+  tenant               Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId              String      @map("store_id") @db.Uuid
+  store                Store       @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  cashierUserId        String      @map("cashier_user_id") @db.Uuid
+  cashier              User        @relation(fields: [cashierUserId], references: [id], onDelete: Restrict)
+  status               ShiftStatus @default(OPEN)
+  clockInAt            DateTime    @map("clock_in_at")
+  clockOutAt           DateTime?   @map("clock_out_at")
+  /// Opening cash float in smallest currency units.
+  openingFloatInCents  Int         @default(0) @map("opening_float_in_cents")
+  cashSalesInCents     Int         @default(0) @map("cash_sales_in_cents")
+  cardSalesInCents     Int         @default(0) @map("card_sales_in_cents")
+  qrisSalesInCents     Int         @default(0) @map("qris_sales_in_cents")
+  otherSalesInCents    Int         @default(0) @map("other_sales_in_cents")
+  voidTotalInCents     Int         @default(0) @map("void_total_in_cents")
+  /// Cash returned on void/refund of CASH tenders (integer sen).
+  cashRefundsInCents   Int         @default(0) @map("cash_refunds_in_cents")
+  /// Sum of mid-shift cash drops removed from drawer (integer sen).
+  cashDropsInCents     Int         @default(0) @map("cash_drops_in_cents")
+  discountTotalInCents Int         @default(0) @map("discount_total_in_cents")
+  /// Gratuity collected on sales this shift (integer sen).
+  tipsInCents          Int         @default(0) @map("tips_in_cents")
+  saleCount            Int         @default(0) @map("sale_count")
+  /// Expected drawer = openingFloat + cashSales - cashRefunds - cashDrops (integer).
+  expectedCashInCents  Int?        @map("expected_cash_in_cents")
+  countedCashInCents   Int?        @map("counted_cash_in_cents")
+  discrepancyInCents   Int?        @map("discrepancy_in_cents")
+  createdAt            DateTime    @default(now()) @map("created_at")
+  updatedAt            DateTime    @updatedAt @map("updated_at")
+  sales                Sale[]
+  supervisorActions    SupervisorAction[]
+  drawerMovements      CashDrawerMovement[]
+
+  @@index([tenantId, storeId, status])
+  @@index([tenantId, cashierUserId, status])
+  @@map("cashier_shifts")
+}
+
+enum CashDrawerMovementType {
+  DROP
+  MID_COUNT
+}
+
+/// Mid-shift cash drop or blind mid-count against the open drawer.
+model CashDrawerMovement {
+  id               String                 @id @default(uuid()) @db.Uuid
+  tenantId         String                 @map("tenant_id") @db.Uuid
+  tenant           Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  shiftId          String                 @map("shift_id") @db.Uuid
+  shift            CashierShift           @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  type             CashDrawerMovementType
+  /// DROP: cash removed from drawer. MID_COUNT: blind counted cash at that moment.
+  amountInCents    Int                    @map("amount_in_cents")
+  /// Snapshot of expected cash when the movement was recorded (hidden from cashier until after submit for MID_COUNT).
+  expectedAtInCents Int                   @map("expected_at_in_cents")
+  /// MID_COUNT only: counted - expectedAt (null for DROP).
+  varianceInCents  Int?                   @map("variance_in_cents")
+  note             String?
+  createdByUserId  String                 @map("created_by_user_id") @db.Uuid
+  createdBy        User                   @relation("DrawerMovementActor", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  createdAt        DateTime               @default(now()) @map("created_at")
+
+  @@index([tenantId, shiftId, createdAt])
+  @@map("cash_drawer_movements")
+}
+
+/// Audit of sensitive POS actions that required supervisor PIN / elevated RBAC.
+model SupervisorAction {
+  id              String                @id @default(uuid()) @db.Uuid
+  tenantId        String                @map("tenant_id") @db.Uuid
+  tenant          Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  shiftId         String?               @map("shift_id") @db.Uuid
+  shift           CashierShift?         @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+  actionType      SupervisorActionType  @map("action_type")
+  requesterUserId String                @map("requester_user_id") @db.Uuid
+  requester       User                  @relation("ActionRequester", fields: [requesterUserId], references: [id], onDelete: Restrict)
+  supervisorUserId String               @map("supervisor_user_id") @db.Uuid
+  supervisor      User                  @relation("SupervisorActor", fields: [supervisorUserId], references: [id], onDelete: Restrict)
+  saleId          String?               @map("sale_id") @db.Uuid
+  amountInCents   Int?                  @map("amount_in_cents")
+  reason          String?
+  metadata        Json?
+  createdAt       DateTime              @default(now()) @map("created_at")
+
+  @@index([tenantId, createdAt])
+  @@map("supervisor_actions")
+}
+
+enum ActivityAction {
+  VOID_SALE
+  VOID_ITEM
+  REFUND_SALE
+  MANUAL_DISCOUNT
+  MANUAL_PRICE_OVERRIDE
+  REMOVE_CART_ITEM
+  FORCE_OPEN_DRAWER
+  SUPERVISOR_PIN_OK
+  SUPERVISOR_PIN_FAIL
+  SHIFT_CLOCK_IN
+  SHIFT_CLOCK_OUT
+  ADMIN_CATALOG_CHANGE
+  CASH_DROP
+  MID_COUNT
+  STOCK_TRANSFER
+  STOCK_ADJUST
+  PURCHASE_ORDER
+  GOODS_RECEIPT
+}
+
+/// Immutable activity / audit trail for sensitive POS & auth events.
+model ActivityLog {
+  id              String         @id @default(uuid()) @db.Uuid
+  tenantId        String         @map("tenant_id") @db.Uuid
+  tenant          Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actorUserId     String?        @map("actor_user_id") @db.Uuid
+  actor           User?          @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  action          ActivityAction
+  entityType      String?        @map("entity_type")
+  entityId        String?        @map("entity_id")
+  amountInCents   Int?           @map("amount_in_cents")
+  reason          String?
+  ipAddress       String?        @map("ip_address")
+  userAgent       String?        @map("user_agent")
+  metadata        Json?
+  createdAt       DateTime       @default(now()) @map("created_at")
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, action, createdAt])
+  @@index([tenantId, actorUserId, createdAt])
+  @@map("activity_logs")
+}
+
+enum CartStatus {
+  OPEN
+  CHECKED_OUT
+  ABANDONED
+}
+
+enum SaleStatus {
+  COMPLETED
+  VOIDED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  QRIS
+  OTHER
+  SPLIT
+}
+
+/// Monetary columns are INTEGER smallest currency units (IDR rupiah / sen). Never float.
+model Category {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  sortOrder Int       @default(0) @map("sort_order")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  products  Product[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("categories")
+}
+
+model Product {
+  id              String     @id @default(uuid()) @db.Uuid
+  tenantId        String     @map("tenant_id") @db.Uuid
+  tenant          Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  categoryId      String     @map("category_id") @db.Uuid
+  category        Category   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  sku             String
+  barcode         String?
+  name            String
+  /// Unit selling price in smallest currency unit (e.g. Rp 15.000 → 15000).
+  unitPriceInCents Int       @map("unit_price_in_cents")
+  /// Tax in basis points (1100 = 11%). Integer rate; line tax is computed as integer sen.
+  taxBps          Int        @default(0) @map("tax_bps")
+  stockQty        Int        @default(0) @map("stock_qty")
+  isActive        Boolean    @default(true) @map("is_active")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+  cartItems       CartItem[]
+  saleLines       SaleLine[]
+  dailyProductSummaries DailyProductSummary[]
+  modifierGroups  ProductModifierGroup[]
+  storeStocks     StoreStock[]
+  storePrices     StorePrice[]
+  transferLines   StockTransferLine[]
+  purchaseOrderLines PurchaseOrderLine[]
+  goodsReceiptLines  GoodsReceiptLine[]
+
+  @@unique([tenantId, sku])
+  @@index([tenantId])
+  @@index([tenantId, categoryId])
+  @@map("products")
+}
+
+/// Per-outlet on-hand quantity. Product.stockQty remains the catalog default / fallback.
+model StoreStock {
+  tenantId  String   @map("tenant_id") @db.Uuid
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId   String   @map("store_id") @db.Uuid
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  productId String   @map("product_id") @db.Uuid
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  qty       Int      @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@id([tenantId, storeId, productId])
+  @@index([tenantId, storeId])
+  @@map("store_stocks")
+}
+
+/// Optional per-outlet list price. Null row → use Product.unitPriceInCents.
+model StorePrice {
+  tenantId         String  @map("tenant_id") @db.Uuid
+  tenant           Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId          String  @map("store_id") @db.Uuid
+  store            Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  productId        String  @map("product_id") @db.Uuid
+  product          Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  unitPriceInCents Int     @map("unit_price_in_cents")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@id([tenantId, storeId, productId])
+  @@index([tenantId, storeId])
+  @@map("store_prices")
+}
+
+/// Durable outbox for edge↔hub async sync (on-prem / unstable network).
+model EdgeSyncOutbox {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId     String?   @map("store_id") @db.Uuid
+  store       Store?    @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  entityType  String    @map("entity_type")
+  entityId    String    @map("entity_id")
+  payload     Json
+  availableAt DateTime  @default(now()) @map("available_at")
+  attempts    Int       @default(0)
+  lastError   String?   @map("last_error")
+  deliveredAt DateTime? @map("delivered_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([tenantId, availableAt])
+  @@index([tenantId, deliveredAt])
+  @@map("edge_sync_outbox")
+}
+
+model EdgeSyncCursor {
+  tenantId  String   @map("tenant_id") @db.Uuid
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  stream    String
+  cursor    String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@id([tenantId, stream])
+  @@map("edge_sync_cursors")
+}
+
+/// Optional add-on groups on a product (size, toppings). Not stock-tracked variants.
+model ProductModifierGroup {
+  id        String                  @id @default(uuid()) @db.Uuid
+  tenantId  String                  @map("tenant_id") @db.Uuid
+  tenant    Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productId String                  @map("product_id") @db.Uuid
+  product   Product                 @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name      String
+  minSelect Int                     @default(0) @map("min_select")
+  maxSelect Int                     @default(1) @map("max_select")
+  sortOrder Int                     @default(0) @map("sort_order")
+  createdAt DateTime                @default(now()) @map("created_at")
+  updatedAt DateTime                @updatedAt @map("updated_at")
+  options   ProductModifierOption[]
+
+  @@index([tenantId, productId])
+  @@map("product_modifier_groups")
+}
+
+model ProductModifierOption {
+  id               String              @id @default(uuid()) @db.Uuid
+  tenantId         String              @map("tenant_id") @db.Uuid
+  tenant           Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  groupId          String              @map("group_id") @db.Uuid
+  group            ProductModifierGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  name             String
+  /// Additive to unit price in integer sen. May be 0.
+  priceDeltaInCents Int                @default(0) @map("price_delta_in_cents")
+  isActive         Boolean             @default(true) @map("is_active")
+  sortOrder        Int                 @default(0) @map("sort_order")
+  createdAt        DateTime            @default(now()) @map("created_at")
+  updatedAt        DateTime            @updatedAt @map("updated_at")
+
+  @@index([tenantId, groupId])
+  @@map("product_modifier_options")
+}
+
+/// Retail customer profile (omnichannel-ready). Separate from staff User.
+model Customer {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name          String
+  phone         String?
+  email         String?
+  notes         String?
+  /// Loyalty points (integer). Earn on completed sales; never float.
+  loyaltyPoints Int      @default(0) @map("loyalty_points")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  carts         Cart[]
+  sales         Sale[]
+
+  @@unique([tenantId, phone])
+  @@index([tenantId, name])
+  @@map("customers")
+}
+
+model Cart {
+  id             String     @id @default(uuid()) @db.Uuid
+  tenantId       String     @map("tenant_id") @db.Uuid
+  tenant         Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId        String     @map("store_id") @db.Uuid
+  store          Store      @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  cashierUserId  String?    @map("cashier_user_id") @db.Uuid
+  cashier        User?      @relation(fields: [cashierUserId], references: [id], onDelete: SetNull)
+  customerId     String?    @map("customer_id") @db.Uuid
+  customer       Customer?  @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  status         CartStatus @default(OPEN)
+  /// Optional hold label (table / name) for parked orders.
+  label          String?
+  parkedAt       DateTime?  @map("parked_at")
+  /// Client UUID so an offline cart can be upserted without duplicates.
+  clientUuid     String     @map("client_uuid")
+  subtotalInCents Int       @default(0) @map("subtotal_in_cents")
+  taxInCents     Int        @default(0) @map("tax_in_cents")
+  totalInCents   Int        @default(0) @map("total_in_cents")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+  items          CartItem[]
+  sale           Sale?
+
+  @@unique([tenantId, clientUuid])
+  @@index([tenantId, storeId, status])
+  @@map("carts")
+}
+
+model CartItem {
+  id                 String   @id @default(uuid()) @db.Uuid
+  tenantId           String   @map("tenant_id") @db.Uuid
+  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cartId             String   @map("cart_id") @db.Uuid
+  cart               Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId          String   @map("product_id") @db.Uuid
+  product            Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  productName        String   @map("product_name")
+  quantity           Int
+  unitPriceInCents   Int      @map("unit_price_in_cents")
+  taxBps             Int      @map("tax_bps")
+  taxInCents         Int      @map("tax_in_cents")
+  lineSubtotalInCents Int     @map("line_subtotal_in_cents")
+  lineTotalInCents   Int      @map("line_total_in_cents")
+  /// Snapshot of selected modifiers [{optionId,name,priceDeltaInCents}]
+  modifiersJson      Json?    @map("modifiers_json")
+  /// Guest / seat index for bill split (1-based). Default 1 = single check.
+  guestIndex         Int      @default(1) @map("guest_index")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@index([tenantId, cartId])
+  @@map("cart_items")
+}
+
+model Sale {
+  id               String        @id @db.Uuid
+  tenantId         String        @map("tenant_id") @db.Uuid
+  tenant           Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId          String        @map("store_id") @db.Uuid
+  store            Store         @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  cashierUserId    String?       @map("cashier_user_id") @db.Uuid
+  cashier          User?         @relation(fields: [cashierUserId], references: [id], onDelete: SetNull)
+  shiftId          String?       @map("shift_id") @db.Uuid
+  shift            CashierShift? @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+  cartId           String?       @unique @map("cart_id") @db.Uuid
+  cart             Cart?         @relation(fields: [cartId], references: [id], onDelete: SetNull)
+  customerId       String?       @map("customer_id") @db.Uuid
+  customer         Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  status           SaleStatus    @default(COMPLETED)
+  paymentMethod    PaymentMethod @map("payment_method")
+  subtotalInCents  Int           @map("subtotal_in_cents")
+  taxInCents       Int           @map("tax_in_cents")
+  discountInCents  Int           @default(0) @map("discount_in_cents")
+  /// Gratuity / tip paid by customer (integer sen). Included in totalInCents.
+  tipInCents       Int           @default(0) @map("tip_in_cents")
+  totalInCents     Int           @map("total_in_cents")
+  /// Points awarded on this sale (integer).
+  loyaltyPointsEarned Int        @default(0) @map("loyalty_points_earned")
+  /// Wall-clock on the cashier device (offline). Used later for conflict ordering.
+  clientCreatedAt  DateTime      @map("client_created_at")
+  syncedAt         DateTime      @default(now()) @map("synced_at")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+  lines            SaleLine[]
+  payments         SalePayment[]
+
+  @@index([tenantId, storeId, clientCreatedAt])
+  @@index([tenantId, shiftId])
+  @@index([tenantId, customerId])
+  /// Dashboard / ops: filter completed sales by day without seq-scan.
+  @@index([tenantId, status, clientCreatedAt])
+  @@map("sales")
+}
+
+/// Split-tender lines for a sale. Sum(amountInCents) must equal Sale.totalInCents.
+model SalePayment {
+  id             String        @id @default(uuid()) @db.Uuid
+  tenantId       String        @map("tenant_id") @db.Uuid
+  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  saleId         String        @map("sale_id") @db.Uuid
+  sale           Sale          @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  /// Must not be SPLIT — each row is a concrete tender.
+  paymentMethod  PaymentMethod @map("payment_method")
+  amountInCents  Int           @map("amount_in_cents")
+  /// Optional cash tendered for change calc on CASH lines.
+  amountTenderedInCents Int?   @map("amount_tendered_in_cents")
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  @@index([tenantId, saleId])
+  @@map("sale_payments")
+}
+
+model SaleLine {
+  id                  String   @id @default(uuid()) @db.Uuid
+  tenantId            String   @map("tenant_id") @db.Uuid
+  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  saleId              String   @map("sale_id") @db.Uuid
+  sale                Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  productId           String   @map("product_id") @db.Uuid
+  product             Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  productName         String   @map("product_name")
+  quantity            Int
+  unitPriceInCents    Int      @map("unit_price_in_cents")
+  taxBps              Int      @map("tax_bps")
+  taxInCents          Int      @map("tax_in_cents")
+  lineSubtotalInCents Int      @map("line_subtotal_in_cents")
+  lineTotalInCents    Int      @map("line_total_in_cents")
+  modifiersJson       Json?    @map("modifiers_json")
+  guestIndex          Int      @default(1) @map("guest_index")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId, saleId])
+  @@index([tenantId, productId])
+  @@map("sale_lines")
+}
+
+enum StockTransferStatus {
+  COMPLETED
+  CANCELLED
+}
+
+/// Immediate inter-store stock move (ship+receive in one TX for MVP).
+model StockTransfer {
+  id              String              @id @default(uuid()) @db.Uuid
+  tenantId        String              @map("tenant_id") @db.Uuid
+  tenant          Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  fromStoreId     String              @map("from_store_id") @db.Uuid
+  fromStore       Store               @relation("TransferFromStore", fields: [fromStoreId], references: [id], onDelete: Restrict)
+  toStoreId       String              @map("to_store_id") @db.Uuid
+  toStore         Store               @relation("TransferToStore", fields: [toStoreId], references: [id], onDelete: Restrict)
+  status          StockTransferStatus @default(COMPLETED)
+  note            String?
+  createdByUserId String              @map("created_by_user_id") @db.Uuid
+  createdBy       User                @relation("StockTransferActor", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  createdAt       DateTime            @default(now()) @map("created_at")
+  lines           StockTransferLine[]
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, fromStoreId])
+  @@index([tenantId, toStoreId])
+  @@map("stock_transfers")
+}
+
+model StockTransferLine {
+  id          String        @id @default(uuid()) @db.Uuid
+  tenantId    String        @map("tenant_id") @db.Uuid
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transferId  String        @map("transfer_id") @db.Uuid
+  transfer    StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  productId   String        @map("product_id") @db.Uuid
+  product     Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+  qty         Int
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  @@index([tenantId, transferId])
+  @@map("stock_transfer_lines")
+}
+
+// ---------------------------------------------------------------------------
+// Purchasing / Receiving — supplier PO → goods receipt → store stock inbound
+// All costs are INTEGER sen. Receiving may be partial across multiple GRs.
+// ---------------------------------------------------------------------------
+
+enum PurchaseOrderStatus {
+  DRAFT
+  ORDERED
+  PARTIAL
+  RECEIVED
+  CANCELLED
+}
+
+model Supplier {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code      String
+  name      String
+  phone     String?
+  email     String?
+  address   String?
+  notes     String?
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  purchaseOrders PurchaseOrder[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, isActive])
+  @@map("suppliers")
+}
+
+/// Purchase order header. Default receive store can be overridden at GR time.
+model PurchaseOrder {
+  id              String              @id @default(uuid()) @db.Uuid
+  tenantId        String              @map("tenant_id") @db.Uuid
+  tenant          Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplierId      String              @map("supplier_id") @db.Uuid
+  supplier        Supplier            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  /// Preferred / default store for receiving.
+  storeId         String              @map("store_id") @db.Uuid
+  store           Store               @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  code            String
+  status          PurchaseOrderStatus @default(DRAFT)
+  note            String?
+  /// Sum of line totals (qtyOrdered * unitCost) in integer sen.
+  subtotalInCents Int                 @default(0) @map("subtotal_in_cents")
+  orderedAt       DateTime?           @map("ordered_at")
+  receivedAt      DateTime?           @map("received_at")
+  cancelledAt     DateTime?           @map("cancelled_at")
+  createdByUserId String              @map("created_by_user_id") @db.Uuid
+  createdBy       User                @relation("PurchaseOrderActor", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+  lines           PurchaseOrderLine[]
+  receipts        GoodsReceipt[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, status, createdAt])
+  @@index([tenantId, supplierId])
+  @@index([tenantId, storeId])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderLine {
+  id              String        @id @default(uuid()) @db.Uuid
+  tenantId        String        @map("tenant_id") @db.Uuid
+  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  purchaseOrderId String        @map("purchase_order_id") @db.Uuid
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  productId       String        @map("product_id") @db.Uuid
+  product         Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+  qtyOrdered      Int           @map("qty_ordered")
+  qtyReceived     Int           @default(0) @map("qty_received")
+  /// Unit purchase cost in integer sen (never float).
+  unitCostInCents Int           @map("unit_cost_in_cents")
+  /// qtyOrdered * unitCostInCents (integer).
+  lineTotalInCents Int          @map("line_total_in_cents")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  receiptLines    GoodsReceiptLine[]
+
+  @@index([tenantId, purchaseOrderId])
+  @@index([tenantId, productId])
+  @@map("purchase_order_lines")
+}
+
+/// Goods receipt (inbound) against a PO — may be partial; each GR bumps store stock.
+model GoodsReceipt {
+  id              String            @id @default(uuid()) @db.Uuid
+  tenantId        String            @map("tenant_id") @db.Uuid
+  tenant          Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  purchaseOrderId String            @map("purchase_order_id") @db.Uuid
+  purchaseOrder   PurchaseOrder     @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  storeId         String            @map("store_id") @db.Uuid
+  store           Store             @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  code            String
+  note            String?
+  createdByUserId String            @map("created_by_user_id") @db.Uuid
+  createdBy       User              @relation("GoodsReceiptActor", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  createdAt       DateTime          @default(now()) @map("created_at")
+  lines           GoodsReceiptLine[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, purchaseOrderId])
+  @@index([tenantId, storeId, createdAt])
+  @@map("goods_receipts")
+}
+
+model GoodsReceiptLine {
+  id                  String            @id @default(uuid()) @db.Uuid
+  tenantId            String            @map("tenant_id") @db.Uuid
+  tenant              Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  goodsReceiptId      String            @map("goods_receipt_id") @db.Uuid
+  goodsReceipt        GoodsReceipt      @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
+  purchaseOrderLineId String            @map("purchase_order_line_id") @db.Uuid
+  purchaseOrderLine   PurchaseOrderLine @relation(fields: [purchaseOrderLineId], references: [id], onDelete: Restrict)
+  productId           String            @map("product_id") @db.Uuid
+  product             Product           @relation(fields: [productId], references: [id], onDelete: Restrict)
+  qty                 Int
+  /// Snapshot of PO line unit cost at receive time (integer sen).
+  unitCostInCents     Int               @map("unit_cost_in_cents")
+  createdAt           DateTime          @default(now()) @map("created_at")
+
+  @@index([tenantId, goodsReceiptId])
+  @@index([tenantId, purchaseOrderLineId])
+  @@map("goods_receipt_lines")
+}
+
+// ---------------------------------------------------------------------------
+// HRIS — employees, scheduled work shifts, attendance, payroll slips
+// Monetary fields are INTEGER smallest currency units. Never float.
+// ---------------------------------------------------------------------------
+
+enum EmployeeStatus {
+  ACTIVE
+  ON_LEAVE
+  TERMINATED
+}
+
+/// PTKP category reference for Indonesian PPh 21 annual non-taxable income.
+enum PtkpStatus {
+  TK0
+  TK1
+  TK2
+  TK3
+  K0
+  K1
+  K2
+  K3
+}
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  ABSENT
+  LEAVE
+  HALF_DAY
+}
+
+enum PayrollSlipStatus {
+  DRAFT
+  FINALIZED
+}
+
+model Employee {
+  id                 String         @id @default(uuid()) @db.Uuid
+  tenantId           String         @map("tenant_id") @db.Uuid
+  tenant             Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Optional link to POS login user (cashier account).
+  userId             String?        @unique @map("user_id") @db.Uuid
+  user               User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  storeId            String?        @map("store_id") @db.Uuid
+  store              Store?         @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  employeeCode       String         @map("employee_code")
+  fullName           String         @map("full_name")
+  email              String?
+  phone              String?
+  hireDate           DateTime       @map("hire_date") @db.Date
+  status             EmployeeStatus @default(ACTIVE)
+  /// Monthly base salary in smallest currency units (IDR rupiah).
+  baseSalaryInCents  Int            @map("base_salary_in_cents")
+  ptkpStatus         PtkpStatus     @default(TK0) @map("ptkp_status")
+  workShiftId        String?        @map("work_shift_id") @db.Uuid
+  workShift          WorkShift?     @relation(fields: [workShiftId], references: [id], onDelete: SetNull)
+  createdAt          DateTime       @default(now()) @map("created_at")
+  updatedAt          DateTime       @updatedAt @map("updated_at")
+  attendances        Attendance[]
+  payrollSlips       PayrollSlip[]
+
+  @@unique([tenantId, employeeCode])
+  @@index([tenantId, status])
+  @@map("employees")
+}
+
+/// Scheduled work shift template (pagi / malam), distinct from POS CashierShift sessions.
+model WorkShift {
+  id               String     @id @default(uuid()) @db.Uuid
+  tenantId         String     @map("tenant_id") @db.Uuid
+  tenant           Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code             String
+  name             String
+  /// Minutes from midnight local time (e.g. 08:00 → 480).
+  startMinutes     Int        @map("start_minutes")
+  endMinutes       Int        @map("end_minutes")
+  breakMinutes     Int        @default(60) @map("break_minutes")
+  /// Standard paid minutes after break (computed/stored for clarity).
+  standardMinutes  Int        @map("standard_minutes")
+  isActive         Boolean    @default(true) @map("is_active")
+  createdAt        DateTime   @default(now()) @map("created_at")
+  updatedAt        DateTime   @updatedAt @map("updated_at")
+  employees        Employee[]
+  attendances      Attendance[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("work_shifts")
+}
+
+model Attendance {
+  id                 String           @id @default(uuid()) @db.Uuid
+  tenantId           String           @map("tenant_id") @db.Uuid
+  tenant             Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employeeId         String           @map("employee_id") @db.Uuid
+  employee           Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  workShiftId        String?          @map("work_shift_id") @db.Uuid
+  workShift          WorkShift?       @relation(fields: [workShiftId], references: [id], onDelete: SetNull)
+  /// Optional link when attendance is derived from a POS cashier shift.
+  cashierShiftId     String?          @map("cashier_shift_id") @db.Uuid
+  workDate           DateTime         @map("work_date") @db.Date
+  clockInAt          DateTime?        @map("clock_in_at")
+  clockOutAt         DateTime?        @map("clock_out_at")
+  status             AttendanceStatus @default(PRESENT)
+  scheduledMinutes   Int              @default(0) @map("scheduled_minutes")
+  workedMinutes      Int              @default(0) @map("worked_minutes")
+  overtimeMinutes    Int              @default(0) @map("overtime_minutes")
+  notes              String?
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
+
+  @@unique([tenantId, employeeId, workDate])
+  @@index([tenantId, workDate])
+  @@map("attendances")
+}
+
+model PayrollSlip {
+  id                    String            @id @default(uuid()) @db.Uuid
+  tenantId              String            @map("tenant_id") @db.Uuid
+  tenant                Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employeeId            String            @map("employee_id") @db.Uuid
+  employee              Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  periodYear            Int               @map("period_year")
+  periodMonth           Int               @map("period_month")
+  status                PayrollSlipStatus @default(DRAFT)
+  baseSalaryInCents     Int               @map("base_salary_in_cents")
+  overtimePayInCents    Int               @default(0) @map("overtime_pay_in_cents")
+  grossInCents          Int               @map("gross_in_cents")
+  /// Monthly PPh 21 withholding (integer sen).
+  pph21InCents          Int               @default(0) @map("pph21_in_cents")
+  netInCents            Int               @map("net_in_cents")
+  overtimeMinutes       Int               @default(0) @map("overtime_minutes")
+  presentDays           Int               @default(0) @map("present_days")
+  /// Opaque breakdown from PayrollService (brackets, PTKP, OT rates).
+  breakdown             Json?
+  calculatedAt          DateTime          @default(now()) @map("calculated_at")
+  createdAt             DateTime          @default(now()) @map("created_at")
+  updatedAt             DateTime          @updatedAt @map("updated_at")
+
+  @@unique([tenantId, employeeId, periodYear, periodMonth])
+  @@index([tenantId, periodYear, periodMonth])
+  @@map("payroll_slips")
+}
+
+// ---------------------------------------------------------------------------
+// Analytics summary tables — dashboard reads these so peak-hour POS ops
+// are not hit with heavy GROUP BY on sales / sale_lines.
+// Updated incrementally on sale sync / void within the same tenant TX.
+// ---------------------------------------------------------------------------
+
+model DailySalesSummary {
+  id                 String   @id @default(uuid()) @db.Uuid
+  tenantId           String   @map("tenant_id") @db.Uuid
+  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId            String   @map("store_id") @db.Uuid
+  store              Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  /// Calendar day in tenant local intent (UTC date stored as DATE).
+  summaryDate        DateTime @map("summary_date") @db.Date
+  /// Gross = sum(subtotal + tax) before discount/void adjustments tracked separately.
+  grossSalesInCents  Int      @default(0) @map("gross_sales_in_cents")
+  discountInCents    Int      @default(0) @map("discount_in_cents")
+  voidInCents        Int      @default(0) @map("void_in_cents")
+  /// Net = gross - discount - void (integer).
+  netSalesInCents    Int      @default(0) @map("net_sales_in_cents")
+  transactionCount   Int      @default(0) @map("transaction_count")
+  cashInCents        Int      @default(0) @map("cash_in_cents")
+  cardInCents        Int      @default(0) @map("card_in_cents")
+  qrisInCents        Int      @default(0) @map("qris_in_cents")
+  otherInCents       Int      @default(0) @map("other_in_cents")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  @@unique([tenantId, storeId, summaryDate])
+  @@index([tenantId, summaryDate])
+  @@map("daily_sales_summaries")
+}
+
+model DailyProductSummary {
+  id                String   @id @default(uuid()) @db.Uuid
+  tenantId          String   @map("tenant_id") @db.Uuid
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId           String   @map("store_id") @db.Uuid
+  productId         String   @map("product_id") @db.Uuid
+  product           Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productName       String   @map("product_name")
+  summaryDate       DateTime @map("summary_date") @db.Date
+  quantitySold      Int      @default(0) @map("quantity_sold")
+  revenueInCents    Int      @default(0) @map("revenue_in_cents")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  @@unique([tenantId, storeId, productId, summaryDate])
+  @@index([tenantId, summaryDate, quantitySold])
+  @@map("daily_product_summaries")
+}

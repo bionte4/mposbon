@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-900 antialiased;
+    /* Notch / home-indicator friendly on installed PWA */
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+      env(safe-area-inset-left);
+  }
+
+  /* Prevent iOS zoom on input focus (font-size >= 16px) */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  @media (min-width: 640px) {
+    input,
+    select,
+    textarea {
+      font-size: inherit;
+    }
+  }
+}
+
+@layer components {
+  /* ≥48px touch targets for POS / tablet workflows */
+  .touch-target {
+    @apply inline-flex min-h-touch min-w-12 items-center justify-center;
+  }
+
+  .pos-product-tile {
+    @apply flex min-h-[7.5rem] flex-col justify-between rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-sm transition active:scale-[0.98] disabled:opacity-40 sm:min-h-[8.5rem] sm:p-4;
+  }
+
+  .pos-pay-btn {
+    @apply flex min-h-14 w-full items-center justify-center rounded-2xl bg-emerald-600 text-base font-bold text-white shadow-sm disabled:opacity-50 sm:min-h-16 sm:text-lg;
+  }
+
+  .pos-cart-dock {
+    @apply shrink-0 border-t border-slate-200 bg-white px-3 py-3 sm:px-4 sm:py-3.5;
+  }
+
+  .pos-cart-tool {
+    @apply flex min-h-11 flex-1 items-center justify-center rounded-xl px-2 text-sm font-semibold;
+  }
+
+  .app-shell {
+    @apply min-h-dvh bg-slate-50;
+  }
+}

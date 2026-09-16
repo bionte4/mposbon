@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { RequirePermissions } from '../auth/rbac.guard';
 import { PosService } from './pos.service';
 import { SensitivePosService } from './sensitive-pos.service';
@@ -20,6 +20,12 @@ export class PosController {
   @RequirePermissions('pos.sale.create')
   upsertCart(@Body() body: UpsertCartInput) {
     return this.pos.upsertCart(body);
+  }
+
+  @Get('carts/:clientUuid')
+  @RequirePermissions('pos.sale.create')
+  getCart(@Param('clientUuid') clientUuid: string) {
+    return this.pos.getOpenCart(clientUuid);
   }
 
   @Post('sales/sync')

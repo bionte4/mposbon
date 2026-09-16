@@ -97,6 +97,7 @@ export const useSyncStore = defineStore('sync', () => {
       amountTenderedInCents?: number;
       tipInCents?: number;
       guestIndex?: number;
+      paymentChargeId?: string | null;
       payments?: Array<{
         paymentMethod: Exclude<PaymentMethod, 'SPLIT'>;
         amountInCents: number;
@@ -130,7 +131,10 @@ export const useSyncStore = defineStore('sync', () => {
     }
     const subtotalInCents = linesForSale.reduce((s, i) => s + i.lineSubtotalInCents, 0);
     const taxInCents = linesForSale.reduce((s, i) => s + i.taxInCents, 0);
-    const totalInCents = subtotalInCents + taxInCents + tipInCents;
+    // Full-cart checkout uses cart discount; guest partial pays without promo (MVP).
+    const discountInCents =
+      opts?.guestIndex != null ? 0 : current.discountInCents ?? 0;
+    const totalInCents = subtotalInCents + taxInCents - discountInCents + tipInCents;
 
     const payments =
       opts?.payments ??
@@ -159,9 +163,14 @@ export const useSyncStore = defineStore('sync', () => {
       clientCreatedAt,
       subtotalInCents,
       taxInCents,
-      discountInCents: 0,
+      discountInCents,
       tipInCents,
       totalInCents,
+      promoId: opts?.guestIndex != null ? null : current.promoId,
+      promoCode: opts?.guestIndex != null ? null : current.promoCode,
+      loyaltyPointsRedeemed:
+        opts?.guestIndex != null ? 0 : current.loyaltyPointsRedeemed ?? 0,
+      paymentChargeId: opts?.paymentChargeId ?? null,
       syncStatus: 'pending',
       lines: linesForSale.map((item) => ({ ...item, modifiers: item.modifiers ?? [] })),
     };
@@ -191,6 +200,7 @@ export const useSyncStore = defineStore('sync', () => {
         lines: sale.lines.map((line) => ({
           productId: line.productId,
           quantity: line.quantity,
+          variantId: line.variantId ?? null,
           modifierOptionIds: (line.modifiers ?? []).map((m) => m.optionId),
           guestIndex: line.guestIndex ?? 1,
         })),
@@ -198,6 +208,10 @@ export const useSyncStore = defineStore('sync', () => {
         taxInCents: sale.taxInCents,
         discountInCents: sale.discountInCents,
         totalInCents: sale.totalInCents,
+        promoId: sale.promoId,
+        promoCode: sale.promoCode,
+        loyaltyPointsRedeemed: sale.loyaltyPointsRedeemed,
+        paymentChargeId: sale.paymentChargeId,
       },
       { entityId: sale.id, clientTimestamp: clientCreatedAt },
     );

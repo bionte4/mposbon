@@ -109,3 +109,27 @@ export function formatMoney(amountInCents: number, options: MoneyFormatOptions =
 export function formatIdrFromCents(amountInCents: number): string {
   return formatMoney(amountInCents, { currency: 'IDR', locale: 'id-ID' });
 }
+
+/**
+ * Parse free-form IDR input into whole rupiah (integer).
+ * Strips Rp/IDR symbols, spaces, thousand dots, and commas — never divides by 100.
+ */
+export function parseIdrInput(raw: string): number | null {
+  const cleaned = raw
+    .trim()
+    .replace(/rp\.?/gi, '')
+    .replace(/idr/gi, '')
+    .replace(/[\s.]/g, '')
+    .replace(/,/g, '');
+  if (!cleaned.length || cleaned === '-' || cleaned === '+') return null;
+  if (!/^[+-]?\d+$/.test(cleaned)) return null;
+  const n = Number(cleaned);
+  if (!Number.isSafeInteger(n)) return null;
+  return n;
+}
+
+/** Grouped digits for controlled money inputs (no currency symbol). */
+export function idrInputDisplay(amount: number): string {
+  if (!Number.isInteger(amount)) return '';
+  return formatGroupedInteger(amount, '.');
+}

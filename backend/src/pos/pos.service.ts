@@ -12,6 +12,8 @@ import { AnalyticsSummaryService } from '../analytics/analytics-summary.service'
 import { PrismaService } from '../common/prisma/prisma.service';
 import { TenantContext } from '../common/tenant/tenant-context';
 import { EdgeSyncService } from '../edge-sync/edge-sync.service';
+import { PaymentsService } from '../payments/payments.service';
+import { PromoService } from '../promotions/promo.service';
 import { ShiftService } from '../shifts/shift.service';
 import {
   buildStockConflictMessage,
@@ -21,9 +23,19 @@ import {
 import { lineMoney, sumCents } from './money';
 import { SyncSaleInput, UpsertCartInput } from './pos.types';
 import { SalesExportService } from '../analytics/sales-export.service';
+import { ActivityAction, PaymentChargeStatus } from '@prisma/client';
+import { AuditService } from '../common/audit/audit.service';
+import { RecipesService } from '../recipes/recipes.service';
+import { KitchenService } from '../kitchen/kitchen.service';
+import { GlService } from '../gl/gl.service';
 
 const PAYMENT_METHODS = new Set<string>(['CASH', 'CARD', 'QRIS', 'OTHER', 'SPLIT']);
 const TENDER_METHODS = new Set<string>(['CASH', 'CARD', 'QRIS', 'OTHER']);
+
+function loyaltyPointValueCents(): number {
+  const raw = Number.parseInt(process.env.LOYALTY_POINT_VALUE_CENTS || '100', 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : 100;
+}
 
 @Injectable()
 export class PosService {
@@ -32,6 +44,12 @@ export class PosService {
     private readonly shifts: ShiftService,
     private readonly analyticsSummary: AnalyticsSummaryService,
     private readonly edgeSync: EdgeSyncService,
+    private readonly promos: PromoService,
+    private readonly payments: PaymentsService,
+    private readonly audit: AuditService,
+    private readonly recipes: RecipesService,
+    private readonly kitchen: KitchenService,
+    private readonly gl: GlService,
   ) {}
 
   async bootstrap(storeId?: string) {
@@ -92,6 +110,10 @@ export class PosService {
             },
           },
         },
+        variants: {
+          where: { isActive: true },
+          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+        },
       },
     });
 
@@ -105,8 +127,14 @@ export class PosService {
           where: { tenantId: tenant.id, storeId: store.id },
         })
       : [];
+    const variantStockRows = store
+      ? await this.prisma.db.storeVariantStock.findMany({
+          where: { tenantId: tenant.id, storeId: store.id },
+        })
+      : [];
     const stockMap = new Map(stockRows.map((r) => [r.productId, r.qty]));
     const priceMap = new Map(priceRows.map((r) => [r.productId, r.unitPriceInCents]));
+    const variantStockMap = new Map(variantStockRows.map((r) => [r.variantId, r.qty]));
 
     const productsForStore = products.map((p) => ({
       ...p,
@@ -114,6 +142,10 @@ export class PosService {
       unitPriceInCents: priceMap.has(p.id) ? priceMap.get(p.id)! : p.unitPriceInCents,
       baseUnitPriceInCents: p.unitPriceInCents,
       hasStorePriceOverride: priceMap.has(p.id),
+      variants: (p.variants ?? []).map((v) => ({
+        ...v,
+        stockQty: variantStockMap.get(v.id) ?? 0,
+      })),
     }));
 
     const role = (cashier?.role ?? 'CASHIER') as StaffRole;
@@ -172,6 +204,33 @@ export class PosService {
       return { stale: true as const, cart: existing };
     }
 
+    let tableId: string | null = input.tableId ?? existing?.tableId ?? null;
+    let label = input.label ?? existing?.label ?? null;
+    if (input.tableId) {
+      const table = await this.prisma.db.diningTable.findFirst({
+        where: { id: input.tableId, tenantId: tenant.id, storeId: input.storeId, isActive: true },
+      });
+      if (!table) {
+        throw new BadRequestException('Dining table not found for this store');
+      }
+      tableId = table.id;
+      if (!label?.trim()) {
+        label = `${table.code} · ${table.name}`;
+      }
+      // One active OPEN cart per table — release stale empty assignments.
+      await this.prisma.db.cart.updateMany({
+        where: {
+          tenantId: tenant.id,
+          tableId: table.id,
+          status: CartStatus.OPEN,
+          NOT: { clientUuid: input.clientUuid },
+        },
+        data: { tableId: null },
+      });
+    } else if (input.tableId === null) {
+      tableId = null;
+    }
+
     const priced = await this.priceLines(tenant.id, input.storeId, input.lines);
     const subtotalInCents = sumCents(priced.map((line) => line.lineSubtotalInCents));
     const taxInCents = sumCents(priced.map((line) => line.taxInCents));
@@ -187,7 +246,8 @@ export class PosService {
           storeId: input.storeId,
           cashierUserId: input.cashierUserId ?? null,
           customerId: input.customerId ?? null,
-          label: input.label ?? null,
+          label,
+          tableId,
           parkedAt: input.parkedAt ? new Date(input.parkedAt) : null,
           status,
           subtotalInCents,
@@ -203,7 +263,8 @@ export class PosService {
           storeId: input.storeId,
           cashierUserId: input.cashierUserId ?? null,
           customerId: input.customerId ?? null,
-          label: input.label ?? null,
+          label,
+          tableId,
           parkedAt: input.parkedAt ? new Date(input.parkedAt) : null,
           clientUuid: input.clientUuid,
           status,
@@ -235,9 +296,30 @@ export class PosService {
 
     const cart = await this.prisma.db.cart.findFirst({
       where: { id: cartId, tenantId: tenant.id },
-      include: { items: true },
+      include: { items: true, table: { select: { id: true, code: true, name: true } } },
     });
     return { stale: false as const, cart };
+  }
+
+  /** Download an OPEN cart snapshot for cross-device table resume. */
+  async getOpenCart(clientUuid: string) {
+    const tenant = TenantContext.require();
+    const cart = await this.prisma.db.cart.findFirst({
+      where: {
+        tenantId: tenant.id,
+        clientUuid,
+        status: CartStatus.OPEN,
+      },
+      include: {
+        items: true,
+        table: { select: { id: true, code: true, name: true } },
+        customer: { select: { id: true, name: true } },
+      },
+    });
+    if (!cart) {
+      throw new NotFoundException('Open cart not found');
+    }
+    return cart;
   }
 
   /**
@@ -266,39 +348,103 @@ export class PosService {
       throw new NotFoundException('Store not found');
     }
 
-    const discountInCents = input.discountInCents ?? 0;
-    if (!Number.isInteger(discountInCents) || discountInCents < 0) {
-      throw new BadRequestException('discountInCents must be a non-negative integer');
-    }
-    const tipInCents = input.tipInCents ?? 0;
-    if (!Number.isInteger(tipInCents) || tipInCents < 0) {
-      throw new BadRequestException('tipInCents must be a non-negative integer');
-    }
-
     const priced = await this.priceLines(
       tenant.id,
       input.storeId,
       input.lines.map((line) => ({
         productId: line.productId,
         quantity: line.quantity,
+        variantId: line.variantId,
         modifierOptionIds: line.modifierOptionIds,
         guestIndex: line.guestIndex,
       })),
     );
     const subtotalInCents = sumCents(priced.map((line) => line.lineSubtotalInCents));
     const taxInCents = sumCents(priced.map((line) => line.taxInCents));
+
+    const promoLines = priced.map((line) => ({
+      productId: line.productId,
+      categoryId: line.categoryId,
+      quantity: line.quantity,
+      lineSubtotalInCents: line.lineSubtotalInCents,
+      taxInCents: line.taxInCents,
+    }));
+
+    // Promo discount (voucher) — server authoritative.
+    let promoDiscount = 0;
+    let promoId: string | null = null;
+    let promoCode: string | null = null;
+    let stackWithLoyalty = true;
+    if (input.promoId || input.promoCode) {
+      const preview = await this.promos.preview({
+        promoId: input.promoId ?? undefined,
+        code: input.promoCode ?? undefined,
+        lines: promoLines,
+      });
+      if (!preview.promo || preview.discountInCents < 1) {
+        throw new BadRequestException('Promo is not applicable to this cart');
+      }
+      promoDiscount = preview.discountInCents;
+      promoId = preview.promo.id;
+      promoCode = preview.promo.code;
+      stackWithLoyalty = preview.stackWithLoyalty;
+    }
+
+    // Loyalty redeem — 1 point = LOYALTY_POINT_VALUE_CENTS (default Rp 100).
+    const loyaltyPointsRedeemed = input.loyaltyPointsRedeemed ?? 0;
+    if (!Number.isInteger(loyaltyPointsRedeemed) || loyaltyPointsRedeemed < 0) {
+      throw new BadRequestException('loyaltyPointsRedeemed must be a non-negative integer');
+    }
+    let loyaltyDiscount = 0;
+    if (loyaltyPointsRedeemed > 0) {
+      if (!input.customerId) {
+        throw new BadRequestException('Customer required to redeem loyalty points');
+      }
+      if (!stackWithLoyalty && promoDiscount > 0) {
+        throw new BadRequestException('This promo cannot be stacked with loyalty redeem');
+      }
+      const customer = await this.prisma.db.customer.findFirst({
+        where: { id: input.customerId, tenantId: tenant.id },
+      });
+      if (!customer) throw new BadRequestException('Customer not found');
+      if (customer.loyaltyPoints < loyaltyPointsRedeemed) {
+        throw new BadRequestException('Insufficient loyalty points');
+      }
+      loyaltyDiscount = loyaltyPointsRedeemed * loyaltyPointValueCents();
+    }
+
+    const discountInCents = promoDiscount + loyaltyDiscount;
+    if (discountInCents !== (input.discountInCents ?? 0)) {
+      throw new BadRequestException(
+        `Discount mismatch (server ${discountInCents}, client ${input.discountInCents ?? 0})`,
+      );
+    }
+
+    const tipInCents = input.tipInCents ?? 0;
+    if (!Number.isInteger(tipInCents) || tipInCents < 0) {
+      throw new BadRequestException('tipInCents must be a non-negative integer');
+    }
+
     const totalInCents = subtotalInCents + taxInCents - discountInCents + tipInCents;
 
     if (
       subtotalInCents !== input.subtotalInCents ||
       taxInCents !== input.taxInCents ||
       totalInCents !== input.totalInCents ||
-      discountInCents !== (input.discountInCents ?? 0) ||
       tipInCents !== (input.tipInCents ?? 0)
     ) {
       throw new BadRequestException(
         'Sale totals do not match integer catalog pricing (possible stale offline prices)',
       );
+    }
+
+    if (promoId) {
+      await this.promos.consumeOnSale({
+        promoId,
+        promoCode,
+        lines: promoLines,
+        expectedDiscountInCents: promoDiscount,
+      });
     }
 
     const cashierUserId = input.cashierUserId ?? AuthContext.current()?.id ?? null;
@@ -330,16 +476,24 @@ export class PosService {
       }
     }
 
-    // Pre-check stock for a clear conflict payload, then atomic decrement below.
-    await this.assertStockAvailable(
-      tenant.id,
-      input.storeId,
+    const stockConsumption = await this.recipes.expandStockConsumption(
       priced.map((line) => ({
         productId: line.productId,
         productName: line.productName,
         quantity: line.quantity,
       })),
     );
+
+    const cogsByLine = new Map<string, number>();
+    for (const line of priced) {
+      cogsByLine.set(
+        line.productId,
+        await this.recipes.calculateCogs(line.productId, line.quantity),
+      );
+    }
+
+    // Pre-check stock for a clear conflict payload, then atomic decrement below.
+    await this.assertStockAvailable(tenant.id, input.storeId, stockConsumption);
 
     const cartResult = await this.upsertCart({
       clientUuid: input.cartClientUuid,
@@ -364,6 +518,24 @@ export class PosService {
         ? (payments[0].paymentMethod as PaymentMethod)
         : ('SPLIT' as PaymentMethod);
 
+    if (input.paymentChargeId) {
+      const charge = await this.prisma.db.paymentCharge.findFirst({
+        where: { id: input.paymentChargeId, tenantId: tenant.id },
+      });
+      if (!charge) throw new BadRequestException('Payment charge not found');
+      if (charge.status !== PaymentChargeStatus.PAID) {
+        throw new BadRequestException('Payment charge is not PAID yet');
+      }
+      const qrisPaid = payments
+        .filter((p) => p.paymentMethod === 'QRIS')
+        .reduce((s, p) => s + p.amountInCents, 0);
+      if (qrisPaid > 0 && charge.amountInCents !== qrisPaid) {
+        throw new BadRequestException(
+          `QRIS charge amount ${charge.amountInCents} != tender ${qrisPaid}`,
+        );
+      }
+    }
+
     const sale = await this.prisma.db.sale.create({
       data: {
         id: input.id,
@@ -380,11 +552,15 @@ export class PosService {
         tipInCents,
         totalInCents,
         loyaltyPointsEarned,
+        loyaltyPointsRedeemed,
+        promoId,
+        promoCode,
         clientCreatedAt: new Date(input.clientCreatedAt),
         lines: {
           create: priced.map((line) => ({
             tenantId: tenant.id,
             productId: line.productId,
+            variantId: line.variantId ?? null,
             productName: line.productName,
             quantity: line.quantity,
             unitPriceInCents: line.unitPriceInCents,
@@ -394,6 +570,7 @@ export class PosService {
             lineTotalInCents: line.lineTotalInCents,
             modifiersJson: line.modifiers.length ? line.modifiers : undefined,
             guestIndex: line.guestIndex,
+            cogsInCents: cogsByLine.get(line.productId) ?? 0,
           })),
         },
         payments: {
@@ -408,15 +585,43 @@ export class PosService {
       include: { lines: true, payments: true },
     });
 
-    if (input.customerId && loyaltyPointsEarned > 0) {
-      await this.prisma.db.customer.update({
-        where: { id: input.customerId },
-        data: { loyaltyPoints: { increment: loyaltyPointsEarned } },
-      });
+    if (input.customerId) {
+      const pointDelta = loyaltyPointsEarned - loyaltyPointsRedeemed;
+      if (loyaltyPointsRedeemed > 0) {
+        const redeemed = await this.prisma.db.$executeRaw`
+          UPDATE customers
+          SET loyalty_points = loyalty_points - ${loyaltyPointsRedeemed},
+              updated_at = CURRENT_TIMESTAMP
+          WHERE id = ${input.customerId}::uuid
+            AND tenant_id = ${tenant.id}::uuid
+            AND loyalty_points >= ${loyaltyPointsRedeemed}
+        `;
+        if (Number(redeemed) === 0) {
+          throw new BadRequestException('Loyalty redeem race — insufficient points');
+        }
+        await this.audit.log({
+          action: ActivityAction.LOYALTY_REDEEM,
+          entityType: 'customer',
+          entityId: input.customerId,
+          amountInCents: loyaltyDiscount,
+          metadata: { points: loyaltyPointsRedeemed },
+        });
+      }
+      if (loyaltyPointsEarned > 0) {
+        await this.prisma.db.customer.update({
+          where: { id: input.customerId },
+          data: { loyaltyPoints: { increment: loyaltyPointsEarned } },
+        });
+      }
+      void pointDelta;
     }
 
-    // Atomic decrement — races between concurrent offline syncs cannot oversell.
-    for (const line of priced) {
+    if (input.paymentChargeId) {
+      await this.payments.attachSale(input.paymentChargeId, sale.id);
+    }
+
+    // Atomic decrement — BOM expands to ingredients; races cannot oversell.
+    for (const line of stockConsumption) {
       await this.decrementStockAtomic(
         tenant.id,
         input.storeId,
@@ -425,6 +630,36 @@ export class PosService {
         line.quantity,
       );
     }
+    for (const line of priced) {
+      if (line.variantId) {
+        await this.decrementVariantStockAtomic(
+          tenant.id,
+          input.storeId,
+          line.variantId,
+          line.productName,
+          line.quantity,
+        );
+      }
+    }
+    await this.recipes.logRecipeConsume(sale.id, stockConsumption);
+    await this.kitchen.completeForSale(input.cartClientUuid, sale.id);
+
+    const totalCogs = [...cogsByLine.values()].reduce((s, n) => s + n, 0);
+    await this.gl.postSaleJournal({
+      id: sale.id,
+      paymentMethod: primaryMethod,
+      payments: payments.map((p) => ({
+        paymentMethod: p.paymentMethod,
+        amountInCents: p.amountInCents,
+      })),
+      subtotalInCents,
+      taxInCents,
+      discountInCents,
+      tipInCents,
+      totalInCents,
+      status: 'COMPLETED',
+      cogsInCents: totalCogs,
+    });
 
     await this.shifts.attachSalePayments(
       shiftId,
@@ -660,6 +895,7 @@ export class PosService {
     lines: Array<{
       productId: string;
       quantity: number;
+      variantId?: string | null;
       modifierOptionIds?: string[];
       guestIndex?: number;
     }>,
@@ -668,10 +904,10 @@ export class PosService {
       return [];
     }
 
-    // Do NOT merge by productId — modifiers make identical products distinct lines.
     const productIds = [...new Set(lines.map((l) => l.productId))];
     const products = await this.prisma.db.product.findMany({
       where: { tenantId, id: { in: productIds }, isActive: true },
+      include: { variants: { where: { isActive: true } } },
     });
     const productMap = new Map(products.map((p) => [p.id, p]));
     if (productMap.size !== productIds.length) {
@@ -704,6 +940,22 @@ export class PosService {
         throw new BadRequestException('guestIndex must be an integer 1..20');
       }
       const product = productMap.get(line.productId)!;
+      const activeVariants = product.variants ?? [];
+      if (activeVariants.length > 0 && !line.variantId) {
+        throw new BadRequestException(`Variant required for ${product.name}`);
+      }
+      let variantName = '';
+      let variantId: string | null = null;
+      let basePrice = storePriceMap.get(product.id) ?? product.unitPriceInCents;
+      if (line.variantId) {
+        const variant = activeVariants.find((v) => v.id === line.variantId);
+        if (!variant) {
+          throw new BadRequestException(`Invalid variant for ${product.name}`);
+        }
+        variantId = variant.id;
+        variantName = ` · ${variant.name}`;
+        basePrice = variant.unitPriceInCents;
+      }
       const mods = (line.modifierOptionIds ?? []).map((id) => {
         const opt = optionMap.get(id);
         if (!opt || opt.group.productId !== product.id) {
@@ -716,13 +968,14 @@ export class PosService {
         };
       });
       const delta = mods.reduce((s, m) => s + m.priceDeltaInCents, 0);
-      const listPrice = storePriceMap.get(product.id) ?? product.unitPriceInCents;
-      const unitPriceInCents = listPrice + delta;
+      const unitPriceInCents = basePrice + delta;
       const money = lineMoney(unitPriceInCents, line.quantity, product.taxBps);
       const suffix = mods.length ? ` (${mods.map((m) => m.name).join(', ')})` : '';
       return {
         productId: product.id,
-        productName: `${product.name}${suffix}`,
+        variantId,
+        productName: `${product.name}${variantName}${suffix}`,
+        categoryId: product.categoryId,
         quantity: line.quantity,
         unitPriceInCents,
         taxBps: product.taxBps,
@@ -731,5 +984,55 @@ export class PosService {
         ...money,
       };
     });
+  }
+
+  private async decrementVariantStockAtomic(
+    tenantId: string,
+    storeId: string,
+    variantId: string,
+    productName: string,
+    quantity: number,
+  ): Promise<void> {
+    await this.prisma.db.$executeRaw`
+      INSERT INTO store_variant_stocks (tenant_id, store_id, variant_id, qty, updated_at)
+      VALUES (${tenantId}::uuid, ${storeId}::uuid, ${variantId}::uuid, 0, CURRENT_TIMESTAMP)
+      ON CONFLICT (tenant_id, store_id, variant_id) DO NOTHING
+    `;
+    const rows = await this.prisma.db.$executeRaw`
+      UPDATE store_variant_stocks
+      SET qty = qty - ${quantity}, updated_at = CURRENT_TIMESTAMP
+      WHERE tenant_id = ${tenantId}::uuid
+        AND store_id = ${storeId}::uuid
+        AND variant_id = ${variantId}::uuid
+        AND qty >= ${quantity}
+    `;
+    if (rows === 0) {
+      const row = await this.prisma.db.storeVariantStock.findUnique({
+        where: {
+          tenantId_storeId_variantId: { tenantId, storeId, variantId },
+        },
+      });
+      throw new ConflictException({
+        statusCode: 409,
+        error: 'Conflict',
+        code: 'STOCK_CONFLICT',
+        message: buildStockConflictMessage([
+          {
+            productId: variantId,
+            productName,
+            requested: quantity,
+            available: row?.qty ?? 0,
+          },
+        ]),
+        conflicts: [
+          {
+            productId: variantId,
+            productName,
+            requested: quantity,
+            available: row?.qty ?? 0,
+          },
+        ],
+      });
+    }
   }
 }

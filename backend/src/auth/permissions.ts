@@ -1,5 +1,6 @@
 export type StaffRole =
   | 'CASHIER'
+  | 'KITCHEN'
   | 'SUPERVISOR'
   | 'MANAGER'
   | 'TENANT_ADMIN'
@@ -14,6 +15,8 @@ export type Permission =
   | 'shift.clock'
   | 'shift.z_report'
   | 'shift.view_all'
+  | 'kitchen.display'
+  | 'kitchen.bump'
   | 'hris.employee.read'
   | 'hris.employee.write'
   | 'hris.attendance.read'
@@ -26,8 +29,13 @@ export type Permission =
   | 'dashboard.read_store'
   | 'admin.access'
   | 'admin.catalog.write'
+  | 'admin.inventory.read'
+  | 'admin.inventory.write'
+  | 'admin.purchasing.write'
+  | 'admin.outlet.write'
   | 'admin.staff.read'
-  | 'admin.staff.write';
+  | 'admin.staff.write'
+  | 'admin.finance.read';
 
 const POS_BASE: Permission[] = [
   'pos.sale.create',
@@ -38,6 +46,9 @@ const POS_BASE: Permission[] = [
   'shift.z_report',
   'dashboard.read',
 ];
+
+/** KDS view + bump — kitchen/bar staff; also granted to supervisors+ for oversight. */
+const KITCHEN_BASE: Permission[] = ['kitchen.display', 'kitchen.bump'];
 
 const HRIS_ALL: Permission[] = [
   'hris.employee.read',
@@ -50,19 +61,42 @@ const HRIS_ALL: Permission[] = [
   'hris.payroll.calculate',
 ];
 
+/** Full admin surface for Manager+. */
 const ADMIN_ALL: Permission[] = [
   'admin.access',
   'admin.catalog.write',
+  'admin.inventory.read',
+  'admin.inventory.write',
+  'admin.purchasing.write',
+  'admin.outlet.write',
   'admin.staff.read',
   'admin.staff.write',
+  'admin.finance.read',
+];
+
+/** Floor ops: opname, transfer, meja — no staff/GL/catalog master. */
+const ADMIN_SUPERVISOR: Permission[] = [
+  'admin.access',
+  'admin.inventory.read',
+  'admin.inventory.write',
+  'admin.outlet.write',
 ];
 
 const ROLE_PERMISSIONS: Record<StaffRole, ReadonlySet<Permission>> = {
-  /** Cashiers: own drawer metrics only (dashboard.read without read_store). */
+  /** Cashiers: POS only — fire to kitchen via sale flow, no KDS bump board. */
   CASHIER: new Set(POS_BASE),
-  SUPERVISOR: new Set([...POS_BASE, 'shift.view_all', 'dashboard.read_store']),
+  /** Kitchen/bar: KDS only; station scope via UserKitchenStation. */
+  KITCHEN: new Set(KITCHEN_BASE),
+  SUPERVISOR: new Set([
+    ...POS_BASE,
+    ...KITCHEN_BASE,
+    'shift.view_all',
+    'dashboard.read_store',
+    ...ADMIN_SUPERVISOR,
+  ]),
   MANAGER: new Set([
     ...POS_BASE,
+    ...KITCHEN_BASE,
     'shift.view_all',
     'dashboard.read_store',
     ...HRIS_ALL,
@@ -70,6 +104,7 @@ const ROLE_PERMISSIONS: Record<StaffRole, ReadonlySet<Permission>> = {
   ]),
   TENANT_ADMIN: new Set([
     ...POS_BASE,
+    ...KITCHEN_BASE,
     'shift.view_all',
     'dashboard.read_store',
     ...HRIS_ALL,
@@ -77,6 +112,7 @@ const ROLE_PERMISSIONS: Record<StaffRole, ReadonlySet<Permission>> = {
   ]),
   SUPER_ADMIN: new Set([
     ...POS_BASE,
+    ...KITCHEN_BASE,
     'shift.view_all',
     'dashboard.read_store',
     ...HRIS_ALL,

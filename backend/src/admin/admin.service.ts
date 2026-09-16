@@ -31,6 +31,8 @@ export type UpsertProductInput = {
   taxBps?: number;
   stockQty?: number;
   isActive?: boolean;
+  productType?: 'RETAIL' | 'MENU' | 'INGREDIENT';
+  kitchenStationId?: string | null;
 };
 
 export type PatchProductInput = Partial<UpsertProductInput>;
@@ -41,6 +43,8 @@ export type CreateStaffInput = {
   role: StaffRole;
   pin: string;
   isActive?: boolean;
+  /** Station IDs for KITCHEN role (BAR / KITCHEN / …). */
+  kitchenStationIds?: string[];
 };
 
 export type PatchStaffInput = {
@@ -49,10 +53,12 @@ export type PatchStaffInput = {
   role?: StaffRole;
   pin?: string | null;
   isActive?: boolean;
+  kitchenStationIds?: string[];
 };
 
 const ROLE_RANK: Record<StaffRole, number> = {
   CASHIER: 1,
+  KITCHEN: 1,
   SUPERVISOR: 2,
   MANAGER: 3,
   TENANT_ADMIN: 4,
@@ -61,6 +67,7 @@ const ROLE_RANK: Record<StaffRole, number> = {
 
 const ASSIGNABLE_ROLES: StaffRole[] = [
   StaffRole.CASHIER,
+  StaffRole.KITCHEN,
   StaffRole.SUPERVISOR,
   StaffRole.MANAGER,
   StaffRole.TENANT_ADMIN,
@@ -176,6 +183,9 @@ export class AdminService {
             options: { orderBy: { sortOrder: 'asc' } },
           },
         },
+        variants: {
+          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+        },
       },
     });
   }
@@ -196,6 +206,8 @@ export class AdminService {
         taxBps: input.taxBps ?? 0,
         stockQty: input.stockQty ?? 0,
         isActive: input.isActive ?? true,
+        productType: input.productType ?? 'RETAIL',
+        kitchenStationId: input.kitchenStationId ?? null,
       },
       include: { category: { select: { id: true, name: true } } },
     });
@@ -247,6 +259,11 @@ export class AdminService {
         taxBps: input.taxBps,
         stockQty: input.stockQty,
         isActive: input.isActive,
+        productType: input.productType,
+        kitchenStationId:
+          input.kitchenStationId === undefined
+            ? undefined
+            : input.kitchenStationId,
       },
       include: { category: { select: { id: true, name: true } } },
     });
@@ -533,12 +550,14 @@ export class AdminService {
           pinHash: true,
           createdAt: true,
           updatedAt: true,
+          kitchenStations: { select: { stationId: true } },
         },
       })
       .then((rows) =>
-        rows.map(({ pinHash, ...rest }) => ({
+        rows.map(({ pinHash, kitchenStations, ...rest }) => ({
           ...rest,
           hasPin: Boolean(pinHash),
+          kitchenStationIds: kitchenStations.map((s) => s.stationId),
         })),
       );
   }
@@ -561,6 +580,12 @@ export class AdminService {
       throw new BadRequestException('Email already registered for this tenant');
     }
 
+    const stationIds = await this.normalizeKitchenStationIds(
+      tenant.id,
+      input.role,
+      input.kitchenStationIds,
+    );
+
     const user = await this.prisma.db.user.create({
       data: {
         tenantId: tenant.id,
@@ -580,16 +605,25 @@ export class AdminService {
         updatedAt: true,
       },
     });
+    if (stationIds.length) {
+      await this.prisma.db.userKitchenStation.createMany({
+        data: stationIds.map((stationId) => ({
+          tenantId: tenant.id,
+          userId: user.id,
+          stationId,
+        })),
+      });
+    }
 
     await this.audit.log({
       action: ActivityAction.ADMIN_CATALOG_CHANGE,
       entityType: 'user',
       entityId: user.id,
       reason: 'admin.create_staff',
-      metadata: { email: user.email, role: user.role },
+      metadata: { email: user.email, role: user.role, kitchenStationIds: stationIds },
     });
 
-    return { ...user, hasPin: true };
+    return { ...user, hasPin: true, kitchenStationIds: stationIds };
   }
 
   async updateStaff(id: string, input: PatchStaffInput) {
@@ -670,7 +704,7 @@ export class AdminService {
       }
     }
 
-    const user = await this.prisma.db.user.update({
+    const updated = await this.prisma.db.user.update({
       where: { id },
       data: {
         ...(email !== undefined ? { email } : {}),
@@ -691,21 +725,79 @@ export class AdminService {
       },
     });
 
+    let kitchenStationIds: string[];
+    if (input.kitchenStationIds !== undefined || input.role !== undefined) {
+      const roleForStations = (input.role ?? existing.role) as StaffRole;
+      const existingStations = await this.prisma.db.userKitchenStation.findMany({
+        where: { userId: id },
+        select: { stationId: true },
+      });
+      kitchenStationIds = await this.normalizeKitchenStationIds(
+        tenant.id,
+        roleForStations,
+        input.kitchenStationIds ?? existingStations.map((r: { stationId: string }) => r.stationId),
+      );
+      await this.prisma.db.userKitchenStation.deleteMany({
+        where: { userId: id, tenantId: tenant.id },
+      });
+      if (kitchenStationIds.length) {
+        await this.prisma.db.userKitchenStation.createMany({
+          data: kitchenStationIds.map((stationId) => ({
+            tenantId: tenant.id,
+            userId: id,
+            stationId,
+          })),
+        });
+      }
+    } else {
+      kitchenStationIds = (
+        await this.prisma.db.userKitchenStation.findMany({
+          where: { userId: id },
+          select: { stationId: true },
+        })
+      ).map((r: { stationId: string }) => r.stationId);
+    }
+
     await this.audit.log({
       action: ActivityAction.ADMIN_CATALOG_CHANGE,
       entityType: 'user',
-      entityId: user.id,
+      entityId: updated.id,
       reason: 'admin.update_staff',
       metadata: {
-        email: user.email,
-        role: user.role,
-        isActive: user.isActive,
+        email: updated.email,
+        role: updated.role,
+        isActive: updated.isActive,
         pinChanged: pinHash !== undefined,
+        kitchenStationIds,
       },
     });
 
-    const { pinHash: storedPin, ...rest } = user;
-    return { ...rest, hasPin: Boolean(storedPin) };
+    const { pinHash: storedPin, ...rest } = updated;
+    return {
+      ...rest,
+      hasPin: Boolean(storedPin),
+      kitchenStationIds,
+    };
+  }
+
+  private async normalizeKitchenStationIds(
+    tenantId: string,
+    role: StaffRole,
+    raw: string[] | undefined,
+  ): Promise<string[]> {
+    const ids = [...new Set((raw ?? []).filter(Boolean))];
+    if (role !== StaffRole.KITCHEN) {
+      return [];
+    }
+    if (!ids.length) return [];
+    const found = await this.prisma.db.kitchenStation.findMany({
+      where: { tenantId, id: { in: ids } },
+      select: { id: true },
+    });
+    if (found.length !== ids.length) {
+      throw new BadRequestException('One or more kitchen stations are invalid');
+    }
+    return found.map((s) => s.id);
   }
 
   private normalizeEmail(email: string): string {
@@ -737,24 +829,84 @@ export class AdminService {
     }
   }
 
+  private storeSelect = {
+    id: true,
+    code: true,
+    name: true,
+    address: true,
+    phone: true,
+    timezone: true,
+    receiptHeader: true,
+    receiptFooter: true,
+    isActive: true,
+    qrisPayload: true,
+    updatedAt: true,
+  } as const;
+
   listStores() {
     const tenant = TenantContext.require();
     return this.prisma.db.store.findMany({
       where: { tenantId: tenant.id },
       orderBy: { code: 'asc' },
-      select: {
-        id: true,
-        code: true,
-        name: true,
-        qrisPayload: true,
-        updatedAt: true,
-      },
+      select: this.storeSelect,
     });
+  }
+
+  async createStore(input: {
+    code: string;
+    name: string;
+    address?: string | null;
+    phone?: string | null;
+    timezone?: string;
+    receiptHeader?: string | null;
+    receiptFooter?: string | null;
+    qrisPayload?: string | null;
+    isActive?: boolean;
+  }) {
+    const tenant = TenantContext.require();
+    const code = input.code?.trim().toUpperCase();
+    const name = input.name?.trim();
+    if (!code || !name) {
+      throw new BadRequestException('code and name are required');
+    }
+    const qrisPayload = this.normalizeQris(input.qrisPayload);
+    const store = await this.prisma.db.store.create({
+      data: {
+        tenantId: tenant.id,
+        code,
+        name,
+        address: input.address?.trim() || null,
+        phone: input.phone?.trim() || null,
+        timezone: input.timezone?.trim() || 'Asia/Jakarta',
+        receiptHeader: input.receiptHeader?.trim() || null,
+        receiptFooter: input.receiptFooter?.trim() || null,
+        qrisPayload,
+        isActive: input.isActive ?? true,
+      },
+      select: this.storeSelect,
+    });
+    await this.audit.log({
+      action: ActivityAction.ADMIN_CATALOG_CHANGE,
+      entityType: 'store',
+      entityId: store.id,
+      reason: `Created store ${store.code}`,
+      metadata: { name: store.name },
+    });
+    return store;
   }
 
   async updateStore(
     id: string,
-    input: { qrisPayload?: string | null },
+    input: {
+      name?: string;
+      address?: string | null;
+      phone?: string | null;
+      timezone?: string;
+      receiptHeader?: string | null;
+      receiptFooter?: string | null;
+      isActive?: boolean;
+      qrisPayload?: string | null;
+    },
   ) {
     const tenant = TenantContext.require();
     const existing = await this.prisma.db.store.findFirst({
@@ -764,39 +916,59 @@ export class AdminService {
       throw new NotFoundException('Store not found');
     }
 
-    let qrisPayload: string | null | undefined = undefined;
-    if (input.qrisPayload !== undefined) {
-      const raw = input.qrisPayload?.trim() ?? '';
-      qrisPayload = raw.length ? raw : null;
-      // EMVCo QRIS MPM strings are typically 50–500+ chars; reject nonsense short values.
-      if (qrisPayload && qrisPayload.length < 20) {
-        throw new BadRequestException('qrisPayload looks too short for a QRIS EMV string');
-      }
+    const qrisPayload =
+      input.qrisPayload !== undefined ? this.normalizeQris(input.qrisPayload) : undefined;
+    if (input.name !== undefined && !input.name.trim()) {
+      throw new BadRequestException('name cannot be empty');
+    }
+    if (input.timezone !== undefined && !input.timezone.trim()) {
+      throw new BadRequestException('timezone cannot be empty');
     }
 
     const updated = await this.prisma.db.store.update({
       where: { id },
       data: {
+        ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+        ...(input.address !== undefined
+          ? { address: input.address?.trim() || null }
+          : {}),
+        ...(input.phone !== undefined ? { phone: input.phone?.trim() || null } : {}),
+        ...(input.timezone !== undefined ? { timezone: input.timezone.trim() } : {}),
+        ...(input.receiptHeader !== undefined
+          ? { receiptHeader: input.receiptHeader?.trim() || null }
+          : {}),
+        ...(input.receiptFooter !== undefined
+          ? { receiptFooter: input.receiptFooter?.trim() || null }
+          : {}),
+        ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
         ...(qrisPayload !== undefined ? { qrisPayload } : {}),
       },
-      select: {
-        id: true,
-        code: true,
-        name: true,
-        qrisPayload: true,
-        updatedAt: true,
-      },
+      select: this.storeSelect,
     });
 
     await this.audit.log({
       action: ActivityAction.ADMIN_CATALOG_CHANGE,
       entityType: 'store',
       entityId: id,
-      reason: `Updated store QRIS payload (${updated.code})`,
-      metadata: { hasQris: Boolean(updated.qrisPayload) },
+      reason: `Updated store settings (${updated.code})`,
+      metadata: {
+        hasQris: Boolean(updated.qrisPayload),
+        timezone: updated.timezone,
+        isActive: updated.isActive,
+      },
     });
 
     return updated;
+  }
+
+  private normalizeQris(value: string | null | undefined): string | null {
+    const raw = value?.trim() ?? '';
+    if (!raw.length) return null;
+    // EMVCo QRIS MPM strings are typically 50–500+ chars; reject nonsense short values.
+    if (raw.length < 20) {
+      throw new BadRequestException('qrisPayload looks too short for a QRIS EMV string');
+    }
+    return raw;
   }
 
   async listStoreInventory(storeId: string) {
@@ -1064,17 +1236,21 @@ export class AdminService {
   }
 
   /**
-   * Immediate inter-store transfer: decrement source StoreStock, increment dest,
-   * inside one tenant transaction (PrismaService request TX).
+   * Create inter-store transfer.
+   * - mode `in_transit` (default): DRAFT then auto-ship → IN_TRANSIT (source decremented)
+   * - mode `immediate`: ship+receive in one step → COMPLETED (legacy)
+   * - mode `draft`: DRAFT only (no stock movement)
    */
   async createTransfer(input: {
     fromStoreId: string;
     toStoreId: string;
     note?: string;
+    mode?: 'draft' | 'in_transit' | 'immediate';
     lines: Array<{ productId: string; qty: number }>;
   }) {
     const tenant = TenantContext.require();
     const actor = AuthContext.require();
+    const mode = input.mode ?? 'in_transit';
     if (input.fromStoreId === input.toStoreId) {
       throw new BadRequestException('fromStoreId and toStoreId must differ');
     }
@@ -1102,41 +1278,6 @@ export class AdminService {
       if (!product) {
         throw new BadRequestException(`Product ${line.productId} not found`);
       }
-
-      // Ensure source row exists (seed from catalog stock if missing).
-      await this.prisma.db.$executeRaw`
-        INSERT INTO store_stocks (tenant_id, store_id, product_id, qty, updated_at)
-        SELECT ${tenant.id}::uuid, ${input.fromStoreId}::uuid, ${line.productId}::uuid, p.stock_qty, CURRENT_TIMESTAMP
-        FROM products p
-        WHERE p.id = ${line.productId}::uuid AND p.tenant_id = ${tenant.id}::uuid
-        ON CONFLICT (tenant_id, store_id, product_id) DO NOTHING
-      `;
-      await this.prisma.db.$executeRaw`
-        INSERT INTO store_stocks (tenant_id, store_id, product_id, qty, updated_at)
-        VALUES (${tenant.id}::uuid, ${input.toStoreId}::uuid, ${line.productId}::uuid, 0, CURRENT_TIMESTAMP)
-        ON CONFLICT (tenant_id, store_id, product_id) DO NOTHING
-      `;
-
-      const moved = await this.prisma.db.$executeRaw`
-        UPDATE store_stocks
-        SET qty = qty - ${line.qty}, updated_at = CURRENT_TIMESTAMP
-        WHERE tenant_id = ${tenant.id}::uuid
-          AND store_id = ${input.fromStoreId}::uuid
-          AND product_id = ${line.productId}::uuid
-          AND qty >= ${line.qty}
-      `;
-      if (Number(moved) === 0) {
-        throw new BadRequestException(
-          `Insufficient stock at source for ${product.name} (need ${line.qty})`,
-        );
-      }
-      await this.prisma.db.$executeRaw`
-        UPDATE store_stocks
-        SET qty = qty + ${line.qty}, updated_at = CURRENT_TIMESTAMP
-        WHERE tenant_id = ${tenant.id}::uuid
-          AND store_id = ${input.toStoreId}::uuid
-          AND product_id = ${line.productId}::uuid
-      `;
     }
 
     const transfer = await this.prisma.db.stockTransfer.create({
@@ -1144,7 +1285,7 @@ export class AdminService {
         tenantId: tenant.id,
         fromStoreId: input.fromStoreId,
         toStoreId: input.toStoreId,
-        status: 'COMPLETED',
+        status: 'DRAFT',
         note: input.note ?? null,
         createdByUserId: actor.id,
         lines: {
@@ -1155,26 +1296,320 @@ export class AdminService {
           })),
         },
       },
+    });
+
+    if (mode === 'draft') {
+      return this.getTransfer(transfer.id);
+    }
+    if (mode === 'immediate') {
+      await this.shipTransfer(transfer.id);
+      return this.receiveTransfer(transfer.id);
+    }
+    return this.shipTransfer(transfer.id);
+  }
+
+  async shipTransfer(id: string) {
+    const tenant = TenantContext.require();
+    const transfer = await this.prisma.db.stockTransfer.findFirst({
+      where: { id, tenantId: tenant.id },
+      include: { lines: { include: { product: true } } },
+    });
+    if (!transfer) throw new NotFoundException('Transfer not found');
+    if (transfer.status !== 'DRAFT') {
+      throw new BadRequestException(`Cannot ship transfer in status ${transfer.status}`);
+    }
+
+    for (const line of transfer.lines) {
+      await this.ensureStoreStockRows(
+        tenant.id,
+        transfer.fromStoreId,
+        transfer.toStoreId,
+        line.productId,
+      );
+      const moved = await this.prisma.db.$executeRaw`
+        UPDATE store_stocks
+        SET qty = qty - ${line.qty}, updated_at = CURRENT_TIMESTAMP
+        WHERE tenant_id = ${tenant.id}::uuid
+          AND store_id = ${transfer.fromStoreId}::uuid
+          AND product_id = ${line.productId}::uuid
+          AND qty >= ${line.qty}
+      `;
+      if (Number(moved) === 0) {
+        throw new BadRequestException(
+          `Insufficient stock at source for ${line.product.name} (need ${line.qty})`,
+        );
+      }
+    }
+
+    const updated = await this.prisma.db.stockTransfer.update({
+      where: { id },
+      data: { status: 'IN_TRANSIT', shippedAt: new Date() },
       include: {
         fromStore: { select: { id: true, code: true, name: true } },
         toStore: { select: { id: true, code: true, name: true } },
-        lines: true,
+        lines: {
+          include: { product: { select: { id: true, sku: true, name: true } } },
+        },
+        createdBy: { select: { id: true, displayName: true } },
       },
     });
 
     await this.audit.log({
       action: ActivityAction.STOCK_TRANSFER,
       entityType: 'stock_transfer',
-      entityId: transfer.id,
-      reason: input.note ?? null,
-      metadata: {
-        fromStoreId: input.fromStoreId,
-        toStoreId: input.toStoreId,
-        lines: input.lines,
+      entityId: id,
+      reason: 'ship',
+      metadata: { status: 'IN_TRANSIT' },
+    });
+
+    return updated;
+  }
+
+  async receiveTransfer(id: string) {
+    const tenant = TenantContext.require();
+    const transfer = await this.prisma.db.stockTransfer.findFirst({
+      where: { id, tenantId: tenant.id },
+      include: { lines: { include: { product: true } } },
+    });
+    if (!transfer) throw new NotFoundException('Transfer not found');
+    if (transfer.status !== 'IN_TRANSIT') {
+      throw new BadRequestException(`Cannot receive transfer in status ${transfer.status}`);
+    }
+
+    for (const line of transfer.lines) {
+      await this.ensureStoreStockRows(
+        tenant.id,
+        transfer.fromStoreId,
+        transfer.toStoreId,
+        line.productId,
+      );
+      await this.prisma.db.$executeRaw`
+        UPDATE store_stocks
+        SET qty = qty + ${line.qty}, updated_at = CURRENT_TIMESTAMP
+        WHERE tenant_id = ${tenant.id}::uuid
+          AND store_id = ${transfer.toStoreId}::uuid
+          AND product_id = ${line.productId}::uuid
+      `;
+    }
+
+    const updated = await this.prisma.db.stockTransfer.update({
+      where: { id },
+      data: { status: 'COMPLETED', receivedAt: new Date() },
+      include: {
+        fromStore: { select: { id: true, code: true, name: true } },
+        toStore: { select: { id: true, code: true, name: true } },
+        lines: {
+          include: { product: { select: { id: true, sku: true, name: true } } },
+        },
+        createdBy: { select: { id: true, displayName: true } },
       },
     });
 
-    return transfer;
+    await this.audit.log({
+      action: ActivityAction.STOCK_TRANSFER,
+      entityType: 'stock_transfer',
+      entityId: id,
+      reason: 'receive',
+      metadata: { status: 'COMPLETED' },
+    });
+
+    return updated;
+  }
+
+  async cancelTransfer(id: string) {
+    const tenant = TenantContext.require();
+    const transfer = await this.prisma.db.stockTransfer.findFirst({
+      where: { id, tenantId: tenant.id },
+      include: { lines: { include: { product: true } } },
+    });
+    if (!transfer) throw new NotFoundException('Transfer not found');
+    if (transfer.status === 'COMPLETED' || transfer.status === 'CANCELLED') {
+      throw new BadRequestException(`Cannot cancel transfer in status ${transfer.status}`);
+    }
+
+    // Restore source if already shipped.
+    if (transfer.status === 'IN_TRANSIT') {
+      for (const line of transfer.lines) {
+        await this.prisma.db.$executeRaw`
+          UPDATE store_stocks
+          SET qty = qty + ${line.qty}, updated_at = CURRENT_TIMESTAMP
+          WHERE tenant_id = ${tenant.id}::uuid
+            AND store_id = ${transfer.fromStoreId}::uuid
+            AND product_id = ${line.productId}::uuid
+        `;
+      }
+    }
+
+    const updated = await this.prisma.db.stockTransfer.update({
+      where: { id },
+      data: { status: 'CANCELLED', cancelledAt: new Date() },
+      include: {
+        fromStore: { select: { id: true, code: true, name: true } },
+        toStore: { select: { id: true, code: true, name: true } },
+        lines: {
+          include: { product: { select: { id: true, sku: true, name: true } } },
+        },
+        createdBy: { select: { id: true, displayName: true } },
+      },
+    });
+
+    await this.audit.log({
+      action: ActivityAction.STOCK_TRANSFER,
+      entityType: 'stock_transfer',
+      entityId: id,
+      reason: 'cancel',
+      metadata: { fromStatus: transfer.status },
+    });
+
+    return updated;
+  }
+
+  private async getTransfer(id: string) {
+    const tenant = TenantContext.require();
+    const row = await this.prisma.db.stockTransfer.findFirst({
+      where: { id, tenantId: tenant.id },
+      include: {
+        fromStore: { select: { id: true, code: true, name: true } },
+        toStore: { select: { id: true, code: true, name: true } },
+        lines: {
+          include: { product: { select: { id: true, sku: true, name: true } } },
+        },
+        createdBy: { select: { id: true, displayName: true } },
+      },
+    });
+    if (!row) throw new NotFoundException('Transfer not found');
+    return row;
+  }
+
+  private async ensureStoreStockRows(
+    tenantId: string,
+    fromStoreId: string,
+    toStoreId: string,
+    productId: string,
+  ): Promise<void> {
+    await this.prisma.db.$executeRaw`
+      INSERT INTO store_stocks (tenant_id, store_id, product_id, qty, updated_at)
+      SELECT ${tenantId}::uuid, ${fromStoreId}::uuid, ${productId}::uuid, p.stock_qty, CURRENT_TIMESTAMP
+      FROM products p
+      WHERE p.id = ${productId}::uuid AND p.tenant_id = ${tenantId}::uuid
+      ON CONFLICT (tenant_id, store_id, product_id) DO NOTHING
+    `;
+    await this.prisma.db.$executeRaw`
+      INSERT INTO store_stocks (tenant_id, store_id, product_id, qty, updated_at)
+      VALUES (${tenantId}::uuid, ${toStoreId}::uuid, ${productId}::uuid, 0, CURRENT_TIMESTAMP)
+      ON CONFLICT (tenant_id, store_id, product_id) DO NOTHING
+    `;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Product variants (stock-tracked SKUs under a parent product)
+  // ---------------------------------------------------------------------------
+
+  listVariants(productId: string) {
+    const tenant = TenantContext.require();
+    return this.prisma.db.productVariant.findMany({
+      where: { tenantId: tenant.id, productId },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    });
+  }
+
+  async createVariant(input: {
+    productId: string;
+    sku: string;
+    name: string;
+    barcode?: string | null;
+    unitPriceInCents: number;
+    sortOrder?: number;
+    isActive?: boolean;
+    initialQtyByStore?: Array<{ storeId: string; qty: number }>;
+  }) {
+    const tenant = TenantContext.require();
+    const product = await this.prisma.db.product.findFirst({
+      where: { id: input.productId, tenantId: tenant.id },
+    });
+    if (!product) throw new NotFoundException('Product not found');
+    const sku = input.sku.trim().toUpperCase();
+    if (!sku || !input.name.trim()) {
+      throw new BadRequestException('sku and name are required');
+    }
+    this.assertMoney(input.unitPriceInCents, 'unitPriceInCents');
+
+    const variant = await this.prisma.db.productVariant.create({
+      data: {
+        tenantId: tenant.id,
+        productId: input.productId,
+        sku,
+        name: input.name.trim(),
+        barcode: input.barcode?.trim() || null,
+        unitPriceInCents: input.unitPriceInCents,
+        sortOrder: input.sortOrder ?? 0,
+        isActive: input.isActive !== false,
+      },
+    });
+
+    for (const row of input.initialQtyByStore ?? []) {
+      if (!Number.isInteger(row.qty) || row.qty < 0) continue;
+      await this.prisma.db.storeVariantStock.upsert({
+        where: {
+          tenantId_storeId_variantId: {
+            tenantId: tenant.id,
+            storeId: row.storeId,
+            variantId: variant.id,
+          },
+        },
+        update: { qty: row.qty },
+        create: {
+          tenantId: tenant.id,
+          storeId: row.storeId,
+          variantId: variant.id,
+          qty: row.qty,
+        },
+      });
+    }
+
+    await this.audit.log({
+      action: ActivityAction.ADMIN_CATALOG_CHANGE,
+      entityType: 'product_variant',
+      entityId: variant.id,
+      reason: 'admin.create_variant',
+      metadata: { sku, productId: input.productId },
+    });
+
+    return variant;
+  }
+
+  async updateVariant(
+    id: string,
+    input: Partial<{
+      name: string;
+      barcode: string | null;
+      unitPriceInCents: number;
+      sortOrder: number;
+      isActive: boolean;
+    }>,
+  ) {
+    const tenant = TenantContext.require();
+    const existing = await this.prisma.db.productVariant.findFirst({
+      where: { id, tenantId: tenant.id },
+    });
+    if (!existing) throw new NotFoundException('Variant not found');
+    if (input.unitPriceInCents !== undefined) {
+      this.assertMoney(input.unitPriceInCents, 'unitPriceInCents');
+    }
+    return this.prisma.db.productVariant.update({
+      where: { id },
+      data: {
+        ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+        ...(input.barcode !== undefined
+          ? { barcode: input.barcode?.trim() || null }
+          : {}),
+        ...(input.unitPriceInCents !== undefined
+          ? { unitPriceInCents: input.unitPriceInCents }
+          : {}),
+        ...(input.sortOrder !== undefined ? { sortOrder: input.sortOrder } : {}),
+        ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+      },
+    });
   }
 
   private assertProductInput(input: UpsertProductInput): void {

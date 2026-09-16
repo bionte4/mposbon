@@ -20,6 +20,8 @@ const error = ref<string | null>(null);
 
 const demos = computed(() => [
   { email: 'cashier@bonpos.local', label: t('app.roles.cashier') },
+  { email: 'kitchen@bonpos.local', label: t('app.roles.kitchen') },
+  { email: 'bar@bonpos.local', label: t('app.roles.bar') },
   { email: 'manager@bonpos.local', label: t('app.roles.manager') },
   { email: 'admin@bonpos.local', label: t('app.roles.admin') },
 ]);
@@ -41,10 +43,16 @@ async function submit(): Promise<void> {
     await auth.login(email.value, pin.value);
     await catalog.refreshFromApi();
     toast.success(t('auth.welcome'), auth.staff?.displayName);
-    const redirect = typeof router.currentRoute.value.query.redirect === 'string'
+    const redirectQuery = typeof router.currentRoute.value.query.redirect === 'string'
       ? router.currentRoute.value.query.redirect
-      : '/pos';
-    await router.replace(redirect.startsWith('/') ? redirect : '/pos');
+      : null;
+    const home = auth.has('pos.sale.create')
+      ? '/pos'
+      : auth.has('kitchen.display')
+        ? '/kitchen'
+        : '/status';
+    const redirect = redirectQuery?.startsWith('/') ? redirectQuery : home;
+    await router.replace(redirect);
   } catch (err) {
     error.value = parseApiError(err).message || t('app.loginFailed');
   } finally {

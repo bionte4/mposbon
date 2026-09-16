@@ -9,6 +9,8 @@ export type AuthUser = {
   displayName: string;
   role: StaffRole;
   permissions: Permission[];
+  /** When role=KITCHEN and non-empty, KDS is scoped to these stations. */
+  kitchenStationIds: string[];
 };
 
 const storage = new AsyncLocalStorage<AuthUser>();
@@ -35,6 +37,7 @@ export function toAuthUser(row: {
   email: string;
   displayName: string;
   role: StaffRole;
+  kitchenStationIds?: string[];
 }): AuthUser {
   return {
     id: row.id,
@@ -43,5 +46,6 @@ export function toAuthUser(row: {
     displayName: row.displayName,
     role: row.role,
     permissions: permissionsForRole(row.role),
+    kitchenStationIds: row.kitchenStationIds ?? [],
   };
 }

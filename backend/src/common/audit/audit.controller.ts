@@ -7,7 +7,7 @@ export class AuditController {
   constructor(private readonly audit: AuditService) {}
 
   @Get('logs')
-  @RequirePermissions('dashboard.read_store')
+  @RequirePermissions('admin.finance.read')
   list(@Query('limit') limit?: string) {
     return this.audit.listRecent(limit ? Number.parseInt(limit, 10) : 50);
   }

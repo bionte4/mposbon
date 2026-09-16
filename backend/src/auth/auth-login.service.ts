@@ -26,6 +26,7 @@ export class AuthLoginService {
 
     const user = await this.prismaAdmin.user.findFirst({
       where: { tenantId: tenant.id, email, isActive: true },
+      include: { kitchenStations: { select: { stationId: true } } },
     });
     if (!user || !user.pinHash) {
       throw new UnauthorizedException('Invalid credentials');
@@ -35,6 +36,7 @@ export class AuthLoginService {
     }
 
     const role = user.role as StaffRole;
+    const kitchenStationIds = user.kitchenStations.map((r) => r.stationId);
     const accessToken = signAccessToken({
       sub: user.id,
       tenantId: user.tenantId,
@@ -52,6 +54,7 @@ export class AuthLoginService {
         displayName: user.displayName,
         role,
         permissions: permissionsForRole(role),
+        kitchenStationIds,
       },
     };
   }

@@ -21,6 +21,8 @@ const props = defineProps<{
   qrisPayload?: string | null;
   /** Cart / order ref shown inside dynamic QR additional data. */
   billNumber?: string | null;
+  storeId: string;
+  clientUuid: string;
 }>();
 
 const emit = defineEmits<{
@@ -29,6 +31,7 @@ const emit = defineEmits<{
       paymentMethod: PaymentMethod;
       amountTenderedInCents?: number;
       tipInCents?: number;
+      paymentChargeId?: string;
       payments: TenderPaymentLine[];
     },
   ];
@@ -42,15 +45,21 @@ const tenderedRupiah = ref(0);
 const tipRupiah = ref(0);
 const splitCashRupiah = ref(0);
 const splitSecond = ref<'CARD' | 'QRIS'>('CARD');
+const qrisChargeId = ref<string | null>(null);
 
 watch(
   () => props.totalInCents,
   (total) => {
     tenderedRupiah.value = total + Math.max(0, Math.trunc(tipRupiah.value));
     splitCashRupiah.value = Math.max(1, Math.floor(total / 2));
+    qrisChargeId.value = null;
   },
   { immediate: true },
 );
+
+watch(method, () => {
+  qrisChargeId.value = null;
+});
 
 const tipInCents = computed(() => Math.max(0, Math.trunc(tipRupiah.value)));
 const payableInCents = computed(() => props.totalInCents + tipInCents.value);
@@ -92,6 +101,7 @@ function confirm(): void {
       paymentMethod: 'SPLIT',
       tipInCents: tipInCents.value || undefined,
       amountTenderedInCents: splitCashInCents.value,
+      paymentChargeId: qrisChargeId.value || undefined,
       payments: [
         {
           paymentMethod: 'CASH',
@@ -107,11 +117,13 @@ function confirm(): void {
     return;
   }
   if (cashShort.value) return;
+  if (method.value === 'QRIS' && !qrisChargeId.value) return;
   emit('confirm', {
     paymentMethod: method.value,
     tipInCents: tipInCents.value || undefined,
     amountTenderedInCents:
       method.value === 'CASH' ? amountTenderedInCents.value : undefined,
+    paymentChargeId: qrisChargeId.value || undefined,
     payments: [
       {
         paymentMethod: method.value,
@@ -235,6 +247,9 @@ function confirm(): void {
           :payload="qrisPayload"
           :amount-in-cents="payableInCents"
           :bill-number="billNumber"
+          :store-id="storeId"
+          :client-uuid="clientUuid"
+          @paid="(id) => (qrisChargeId = id)"
         />
       </template>
 
@@ -280,6 +295,9 @@ function confirm(): void {
           :payload="qrisPayload"
           :amount-in-cents="splitSecondInCents"
           :bill-number="billNumber"
+          :store-id="storeId"
+          :client-uuid="clientUuid"
+          @paid="(id) => (qrisChargeId = id)"
         />
         <p v-if="splitInvalid" class="text-sm text-red-700">{{ t('pos.checkout.splitInvalid') }}</p>
       </div>
@@ -296,7 +314,11 @@ function confirm(): void {
       <button
         type="button"
         class="touch-target rounded-2xl bg-emerald-700 text-base font-semibold text-white disabled:opacity-40"
-        :disabled="mode === 'single' ? cashShort : splitInvalid"
+        :disabled="
+          mode === 'single'
+            ? cashShort || (method === 'QRIS' && !qrisChargeId)
+            : splitInvalid || (splitSecond === 'QRIS' && !qrisChargeId)
+        "
         @click="confirm"
       >
         {{ t('pos.checkout.confirm') }}

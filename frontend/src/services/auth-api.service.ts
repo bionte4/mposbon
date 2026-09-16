@@ -11,6 +11,7 @@ export type LoginResponse = {
     displayName: string;
     role: StaffRole;
     permissions: Permission[];
+    kitchenStationIds?: string[];
   };
 };
 
@@ -21,6 +22,7 @@ export type AuthMeResponse = {
   role: StaffRole;
   permissions: Permission[];
   tenantId: string;
+  kitchenStationIds?: string[];
 };
 
 export function loginStaff(email: string, pin: string) {

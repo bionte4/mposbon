@@ -18,13 +18,13 @@ export class PurchasingController {
   }
 
   @Post('suppliers')
-  @RequirePermissions('admin.catalog.write')
+  @RequirePermissions('admin.purchasing.write')
   createSupplier(@Body() body: UpsertSupplierInput) {
     return this.purchasing.createSupplier(body);
   }
 
   @Patch('suppliers/:id')
-  @RequirePermissions('admin.catalog.write')
+  @RequirePermissions('admin.purchasing.write')
   updateSupplier(@Param('id') id: string, @Body() body: Partial<UpsertSupplierInput>) {
     return this.purchasing.updateSupplier(id, body);
   }
@@ -42,25 +42,25 @@ export class PurchasingController {
   }
 
   @Post('orders')
-  @RequirePermissions('admin.catalog.write')
+  @RequirePermissions('admin.purchasing.write')
   createOrder(@Body() body: CreatePurchaseOrderInput) {
     return this.purchasing.createOrder(body);
   }
 
   @Post('orders/:id/confirm')
-  @RequirePermissions('admin.catalog.write')
+  @RequirePermissions('admin.purchasing.write')
   confirmOrder(@Param('id') id: string) {
     return this.purchasing.confirmOrder(id);
   }
 
   @Post('orders/:id/cancel')
-  @RequirePermissions('admin.catalog.write')
+  @RequirePermissions('admin.purchasing.write')
   cancelOrder(@Param('id') id: string) {
     return this.purchasing.cancelOrder(id);
   }
 
   @Post('orders/:id/receive')
-  @RequirePermissions('admin.catalog.write')
+  @RequirePermissions('admin.purchasing.write')
   receive(@Param('id') id: string, @Body() body: ReceiveGoodsInput) {
     return this.purchasing.receive(id, body);
   }

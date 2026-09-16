@@ -4,7 +4,9 @@ import { queryOpenCarts, posDb } from '../db/pos-db';
 import { cloneForIdb } from '../db/serialize';
 import type { LocalCart, LocalCartItem, ModifierSnapshot } from '../db/pos-types';
 import { lineMoney, sumCents } from '../lib/money';
+import { fetchOpenCart, type RemoteOpenCart } from '../services/pos-api.service';
 import { enqueueCartUpsert } from '../services/pos-sync.service';
+import type { FloorTable } from '../services/tables-api.service';
 import { useCatalogStore } from './catalog.store';
 
 function emptyCart(tenantId: string, storeId: string, cashierUserId: string | null): LocalCart {
@@ -16,23 +18,35 @@ function emptyCart(tenantId: string, storeId: string, cashierUserId: string | nu
     customerId: null,
     customerName: null,
     label: null,
+    tableId: null,
+    tableCode: null,
+    tableName: null,
     parkedAt: null,
     status: 'OPEN',
     items: [],
     subtotalInCents: 0,
     taxInCents: 0,
+    discountInCents: 0,
     totalInCents: 0,
+    promoId: null,
+    promoCode: null,
+    loyaltyPointsRedeemed: 0,
     updatedAt: new Date().toISOString(),
   };
 }
 
-function retotal(items: LocalCartItem[]): Pick<LocalCart, 'subtotalInCents' | 'taxInCents' | 'totalInCents'> {
+function retotal(
+  items: LocalCartItem[],
+  discountInCents = 0,
+): Pick<LocalCart, 'subtotalInCents' | 'taxInCents' | 'totalInCents' | 'discountInCents'> {
   const subtotalInCents = sumCents(items.map((item) => item.lineSubtotalInCents));
   const taxInCents = sumCents(items.map((item) => item.taxInCents));
+  const safeDiscount = Math.max(0, Math.min(discountInCents, subtotalInCents + taxInCents));
   return {
     subtotalInCents,
     taxInCents,
-    totalInCents: subtotalInCents + taxInCents,
+    discountInCents: safeDiscount,
+    totalInCents: subtotalInCents + taxInCents - safeDiscount,
   };
 }
 
@@ -89,11 +103,19 @@ export const useCartStore = defineStore('cart', () => {
     cart.value.customerId ??= null;
     cart.value.customerName ??= null;
     cart.value.label ??= null;
+    cart.value.tableId ??= null;
+    cart.value.tableCode ??= null;
+    cart.value.tableName ??= null;
     cart.value.parkedAt ??= null;
+    cart.value.discountInCents ??= 0;
+    cart.value.promoId ??= null;
+    cart.value.promoCode ??= null;
+    cart.value.loyaltyPointsRedeemed ??= 0;
     for (const item of cart.value.items) {
       item.modifiers ??= [];
       item.guestIndex ??= 1;
     }
+    Object.assign(cart.value, retotal(cart.value.items, cart.value.discountInCents));
     await persist();
     await refreshHeld();
   }
@@ -116,12 +138,14 @@ export const useCartStore = defineStore('cart', () => {
       cashierUserId: cart.value.cashierUserId,
       customerId: cart.value.customerId,
       label: cart.value.label,
+      tableId: cart.value.tableId,
       parkedAt: cart.value.parkedAt,
       status: cart.value.status,
       clientUpdatedAt: cart.value.updatedAt,
       lines: cart.value.items.map((item) => ({
         productId: item.productId,
         quantity: item.quantity,
+        variantId: item.variantId ?? null,
         modifierOptionIds: item.modifiers.map((m) => m.optionId),
         guestIndex: item.guestIndex ?? 1,
       })),
@@ -131,42 +155,58 @@ export const useCartStore = defineStore('cart', () => {
   async function addProduct(
     productId: string,
     modifiers: ModifierSnapshot[] = [],
-  ): Promise<void> {
+    variantId?: string | null,
+  ): Promise<LocalCartItem | null> {
     const catalog = useCatalogStore();
     const product = catalog.productById(productId);
     if (!product || !cart.value) {
-      return;
+      return null;
+    }
+    const variant =
+      variantId && product.variants?.length
+        ? product.variants.find((v) => v.id === variantId)
+        : undefined;
+    if ((product.variants?.length ?? 0) > 0 && !variant) {
+      return null;
     }
     const delta = modifiers.reduce((s, m) => s + m.priceDeltaInCents, 0);
-    const unitPriceInCents = product.unitPriceInCents + delta;
+    const base = variant ? variant.unitPriceInCents : product.unitPriceInCents;
+    const unitPriceInCents = base + delta;
     const key = modifiersKey(modifiers);
     const existing = cart.value.items.find(
       (item) =>
         item.productId === productId &&
+        (item.variantId ?? null) === (variant?.id ?? null) &&
         modifiersKey(item.modifiers ?? []) === key &&
         (item.guestIndex ?? 1) === 1,
     );
+    let target: LocalCartItem;
     if (existing) {
       existing.quantity += 1;
       Object.assign(existing, lineMoney(existing.unitPriceInCents, existing.quantity, existing.taxBps));
+      target = existing;
     } else {
       const money = lineMoney(unitPriceInCents, 1, product.taxBps);
+      const variantSuffix = variant ? ` · ${variant.name}` : '';
       const suffix = modifiers.length ? ` (${modifiers.map((m) => m.name).join(', ')})` : '';
-      cart.value.items.push({
+      target = {
         id: crypto.randomUUID(),
         productId: product.id,
-        productName: `${product.name}${suffix}`,
+        variantId: variant?.id ?? null,
+        productName: `${product.name}${variantSuffix}${suffix}`,
         quantity: 1,
         unitPriceInCents,
         taxBps: product.taxBps,
         modifiers: [...modifiers],
         guestIndex: 1,
         ...money,
-      });
+      };
+      cart.value.items.push(target);
     }
-    Object.assign(cart.value, retotal(cart.value.items));
+    Object.assign(cart.value, retotal(cart.value.items, cart.value.discountInCents));
     await persist();
     await queueCartSnapshot();
+    return target;
   }
 
   async function setQuantity(itemId: string, quantity: number): Promise<void> {
@@ -186,9 +226,32 @@ export const useCartStore = defineStore('cart', () => {
       item.quantity = quantity;
       Object.assign(item, lineMoney(item.unitPriceInCents, item.quantity, item.taxBps));
     }
-    Object.assign(cart.value, retotal(cart.value.items));
+    Object.assign(cart.value, retotal(cart.value.items, cart.value.discountInCents));
     await persist();
     await queueCartSnapshot();
+  }
+
+  async function applyDiscount(input: {
+    discountInCents: number;
+    promoId?: string | null;
+    promoCode?: string | null;
+    loyaltyPointsRedeemed?: number;
+  }): Promise<void> {
+    if (!cart.value) return;
+    cart.value.promoId = input.promoId ?? null;
+    cart.value.promoCode = input.promoCode ?? null;
+    cart.value.loyaltyPointsRedeemed = input.loyaltyPointsRedeemed ?? 0;
+    Object.assign(cart.value, retotal(cart.value.items, input.discountInCents));
+    await persist();
+  }
+
+  async function clearDiscount(): Promise<void> {
+    if (!cart.value) return;
+    cart.value.promoId = null;
+    cart.value.promoCode = null;
+    cart.value.loyaltyPointsRedeemed = 0;
+    Object.assign(cart.value, retotal(cart.value.items, 0));
+    await persist();
   }
 
   async function setCustomer(customer: { id: string; name: string } | null): Promise<void> {
@@ -220,7 +283,7 @@ export const useCartStore = defineStore('cart', () => {
     if (!cart.value || !itemIds.length) return;
     const remove = new Set(itemIds);
     cart.value.items = cart.value.items.filter((i) => !remove.has(i.id));
-    Object.assign(cart.value, retotal(cart.value.items));
+    Object.assign(cart.value, retotal(cart.value.items, cart.value.discountInCents));
     await persist();
     await queueCartSnapshot();
   }
@@ -234,7 +297,11 @@ export const useCartStore = defineStore('cart', () => {
     if (!session) {
       return;
     }
-    cart.value.label = label?.trim() || cart.value.customerName || `Hold ${cart.value.clientUuid.slice(0, 4)}`;
+    cart.value.label =
+      label?.trim() ||
+      (cart.value.tableCode ? `${cart.value.tableCode} · ${cart.value.tableName ?? ''}`.trim() : null) ||
+      cart.value.customerName ||
+      `Hold ${cart.value.clientUuid.slice(0, 4)}`;
     cart.value.parkedAt = new Date().toISOString();
     await persist();
     await queueCartSnapshot();
@@ -266,6 +333,102 @@ export const useCartStore = defineStore('cart', () => {
     await persist();
     await queueCartSnapshot();
     await refreshHeld();
+  }
+
+  async function assignTable(table: {
+    id: string;
+    code: string;
+    name: string;
+  }): Promise<void> {
+    if (!cart.value) return;
+    cart.value.tableId = table.id;
+    cart.value.tableCode = table.code;
+    cart.value.tableName = table.name;
+    cart.value.label = `${table.code} · ${table.name}`;
+    await persist();
+    await queueCartSnapshot();
+  }
+
+  async function clearTable(): Promise<void> {
+    if (!cart.value) return;
+    cart.value.tableId = null;
+    cart.value.tableCode = null;
+    cart.value.tableName = null;
+    if (!cart.value.label?.includes('·')) {
+      cart.value.label = null;
+    }
+    await persist();
+    await queueCartSnapshot();
+  }
+
+  function mapRemoteCart(remote: RemoteOpenCart): LocalCart {
+    return {
+      clientUuid: remote.clientUuid,
+      tenantId: remote.tenantId,
+      storeId: remote.storeId,
+      cashierUserId: remote.cashierUserId,
+      customerId: remote.customerId,
+      customerName: remote.customer?.name ?? null,
+      label: remote.label,
+      tableId: remote.tableId,
+      tableCode: remote.table?.code ?? null,
+      tableName: remote.table?.name ?? null,
+      parkedAt: remote.parkedAt,
+      status: 'OPEN',
+      items: remote.items.map((item) => ({
+        id: item.id,
+        productId: item.productId,
+        productName: item.productName,
+        quantity: item.quantity,
+        unitPriceInCents: item.unitPriceInCents,
+        taxBps: item.taxBps,
+        taxInCents: item.taxInCents,
+        lineSubtotalInCents: item.lineSubtotalInCents,
+        lineTotalInCents: item.lineTotalInCents,
+        modifiers: item.modifiersJson ?? [],
+        guestIndex: item.guestIndex ?? 1,
+      })),
+      subtotalInCents: remote.subtotalInCents,
+      taxInCents: remote.taxInCents,
+      discountInCents: 0,
+      totalInCents: remote.totalInCents,
+      promoId: null,
+      promoCode: null,
+      loyaltyPointsRedeemed: 0,
+      updatedAt: remote.updatedAt,
+    };
+  }
+
+  async function importFromServer(clientUuid: string): Promise<void> {
+    const remote = await fetchOpenCart(clientUuid);
+    const mapped = mapRemoteCart(remote);
+    Object.assign(mapped, retotal(mapped.items, mapped.discountInCents));
+    if (cart.value && cart.value.items.length > 0) {
+      cart.value.parkedAt = cart.value.parkedAt ?? new Date().toISOString();
+      cart.value.label =
+        cart.value.label || cart.value.customerName || `Hold ${cart.value.clientUuid.slice(0, 4)}`;
+      await persist();
+      await queueCartSnapshot();
+    }
+    mapped.parkedAt = null;
+    cart.value = mapped;
+    await persist();
+    await queueCartSnapshot();
+    await refreshHeld();
+  }
+
+  async function openTable(table: FloorTable): Promise<void> {
+    if (table.activeCart) {
+      const local = await posDb.carts.get(table.activeCart.clientUuid);
+      if (local && local.status === 'OPEN') {
+        await resume(table.activeCart.clientUuid);
+        return;
+      }
+      await importFromServer(table.activeCart.clientUuid);
+      return;
+    }
+    await startNewCart();
+    await assignTable({ id: table.id, code: table.code, name: table.name });
   }
 
   async function startNewCart(): Promise<void> {
@@ -312,5 +475,10 @@ export const useCartStore = defineStore('cart', () => {
     clear,
     persist,
     startNewCart,
+    assignTable,
+    clearTable,
+    openTable,
+    applyDiscount,
+    clearDiscount,
   };
 });

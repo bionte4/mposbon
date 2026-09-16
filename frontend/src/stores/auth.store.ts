@@ -13,6 +13,7 @@ export type AuthStaff = {
   email: string;
   role: StaffRole;
   permissions: Permission[];
+  kitchenStationIds: string[];
 };
 
 export const useAuthStore = defineStore('auth', () => {
@@ -66,7 +67,10 @@ export const useAuthStore = defineStore('auth', () => {
   async function login(email: string, pin: string): Promise<void> {
     const result = await loginStaff(email.trim().toLowerCase(), pin);
     setAccessToken(result.accessToken);
-    setStaff(result.user);
+    setStaff({
+      ...result.user,
+      kitchenStationIds: result.user.kitchenStationIds ?? [],
+    });
   }
 
   async function restoreSession(): Promise<boolean> {
@@ -83,6 +87,7 @@ export const useAuthStore = defineStore('auth', () => {
         displayName: me.displayName,
         role: me.role,
         permissions: me.permissions,
+        kitchenStationIds: me.kitchenStationIds ?? [],
       });
       bootstrapped.value = true;
       return true;

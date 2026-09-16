@@ -64,6 +64,23 @@ model Tenant {
   purchaseOrderLines PurchaseOrderLine[]
   goodsReceipts    GoodsReceipt[]
   goodsReceiptLines GoodsReceiptLine[]
+  promos           Promo[]
+  paymentCharges   PaymentCharge[]
+  tableAreas       TableArea[]
+  diningTables     DiningTable[]
+  stockCountSessions StockCountSession[]
+  stockCountLines  StockCountLine[]
+  recipes          Recipe[]
+  recipeLines      RecipeLine[]
+  kitchenStations  KitchenStation[]
+  kitchenOrders    KitchenOrder[]
+  kitchenOrderLines KitchenOrderLine[]
+  userKitchenStations UserKitchenStation[]
+  productVariants     ProductVariant[]
+  storeVariantStocks  StoreVariantStock[]
+  glAccounts          GlAccount[]
+  journalEntries      JournalEntry[]
+  journalEntryLines   JournalEntryLine[]
 
   @@map("tenants")
 }
@@ -82,6 +99,8 @@ model TenantSetting {
 
 enum StaffRole {
   CASHIER
+  /// Floor kitchen/bar staff — KDS only (no POS/admin/HRIS). Scope via UserKitchenStation.
+  KITCHEN
   SUPERVISOR
   MANAGER
   TENANT_ADMIN
@@ -111,6 +130,9 @@ model User {
   stockTransfers    StockTransfer[] @relation("StockTransferActor")
   purchaseOrders    PurchaseOrder[] @relation("PurchaseOrderActor")
   goodsReceipts     GoodsReceipt[] @relation("GoodsReceiptActor")
+  stockCountSessions StockCountSession[] @relation("StockCountActor")
+  stockCountCompleted StockCountSession[] @relation("StockCountCompleter")
+  kitchenStations   UserKitchenStation[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -123,6 +145,13 @@ model Store {
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   code        String
   name        String
+  address     String?
+  phone       String?
+  /// IANA timezone for receipts / local day boundaries (e.g. Asia/Jakarta).
+  timezone    String   @default("Asia/Jakarta")
+  receiptHeader String? @map("receipt_header") @db.Text
+  receiptFooter String? @map("receipt_footer") @db.Text
+  isActive    Boolean  @default(true) @map("is_active")
   /// Static QRIS MPM EMVCo payload (from bank/PSP). Shown as QR at checkout.
   qrisPayload String?  @map("qris_payload") @db.Text
   createdAt   DateTime @default(now()) @map("created_at")
@@ -139,6 +168,13 @@ model Store {
   transfersTo   StockTransfer[] @relation("TransferToStore")
   purchaseOrders PurchaseOrder[]
   goodsReceipts  GoodsReceipt[]
+  paymentCharges PaymentCharge[]
+  tableAreas     TableArea[]
+  diningTables   DiningTable[]
+  stockCountSessions StockCountSession[]
+  kitchenStations    KitchenStation[]
+  kitchenOrders      KitchenOrder[]
+  storeVariantStocks StoreVariantStock[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -269,6 +305,13 @@ enum ActivityAction {
   STOCK_ADJUST
   PURCHASE_ORDER
   GOODS_RECEIPT
+  PROMO_APPLY
+  LOYALTY_REDEEM
+  PAYMENT_CHARGE
+  STOCK_COUNT
+  KITCHEN_FIRE
+  RECIPE_CONSUME
+  JOURNAL_POST
 }
 
 /// Immutable activity / audit trail for sensitive POS & auth events.
@@ -324,10 +367,17 @@ model Category {
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   products  Product[]
+  promos    Promo[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
   @@map("categories")
+}
+
+enum ProductType {
+  RETAIL
+  MENU
+  INGREDIENT
 }
 
 model Product {
@@ -339,6 +389,10 @@ model Product {
   sku             String
   barcode         String?
   name            String
+  productType     ProductType @default(RETAIL) @map("product_type")
+  /// Optional KDS routing — items with a station are fired to kitchen display.
+  kitchenStationId String?   @map("kitchen_station_id") @db.Uuid
+  kitchenStation  KitchenStation? @relation(fields: [kitchenStationId], references: [id], onDelete: SetNull)
   /// Unit selling price in smallest currency unit (e.g. Rp 15.000 → 15000).
   unitPriceInCents Int       @map("unit_price_in_cents")
   /// Tax in basis points (1100 = 11%). Integer rate; line tax is computed as integer sen.
@@ -356,11 +410,58 @@ model Product {
   transferLines   StockTransferLine[]
   purchaseOrderLines PurchaseOrderLine[]
   goodsReceiptLines  GoodsReceiptLine[]
+  promos             Promo[]
+  stockCountLines    StockCountLine[]
+  recipe             Recipe?
+  recipeAsIngredient RecipeLine[] @relation("RecipeIngredient")
+  kitchenOrderLines  KitchenOrderLine[]
+  variants           ProductVariant[]
 
   @@unique([tenantId, sku])
   @@index([tenantId])
   @@index([tenantId, categoryId])
   @@map("products")
+}
+
+/// Stock-tracked sellable SKU under a parent product (size/color/pack). Distinct from modifiers.
+model ProductVariant {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @map("tenant_id") @db.Uuid
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productId        String   @map("product_id") @db.Uuid
+  product          Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku              String
+  name             String
+  barcode          String?
+  /// Absolute unit price in sen (overrides parent when selected).
+  unitPriceInCents Int      @map("unit_price_in_cents")
+  sortOrder        Int      @default(0) @map("sort_order")
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  storeStocks      StoreVariantStock[]
+  cartItems        CartItem[]
+  saleLines        SaleLine[]
+
+  @@unique([tenantId, sku])
+  @@index([tenantId, productId, sortOrder])
+  @@map("product_variants")
+}
+
+/// Per-outlet on-hand for a variant SKU.
+model StoreVariantStock {
+  tenantId  String         @map("tenant_id") @db.Uuid
+  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId   String         @map("store_id") @db.Uuid
+  store     Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  variantId String         @map("variant_id") @db.Uuid
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  qty       Int            @default(0)
+  updatedAt DateTime       @updatedAt @map("updated_at")
+
+  @@id([tenantId, storeId, variantId])
+  @@index([tenantId, storeId])
+  @@map("store_variant_stocks")
 }
 
 /// Per-outlet on-hand quantity. Product.stockQty remains the catalog default / fallback.
@@ -498,6 +599,9 @@ model Cart {
   status         CartStatus @default(OPEN)
   /// Optional hold label (table / name) for parked orders.
   label          String?
+  /// F&B dine-in table assignment (Moka-style floor plan).
+  tableId        String?    @map("table_id") @db.Uuid
+  table          DiningTable? @relation(fields: [tableId], references: [id], onDelete: SetNull)
   parkedAt       DateTime?  @map("parked_at")
   /// Client UUID so an offline cart can be upserted without duplicates.
   clientUuid     String     @map("client_uuid")
@@ -511,6 +615,7 @@ model Cart {
 
   @@unique([tenantId, clientUuid])
   @@index([tenantId, storeId, status])
+  @@index([tenantId, tableId, status])
   @@map("carts")
 }
 
@@ -522,6 +627,8 @@ model CartItem {
   cart               Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
   productId          String   @map("product_id") @db.Uuid
   product            Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  variantId          String?  @map("variant_id") @db.Uuid
+  variant            ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Restrict)
   productName        String   @map("product_name")
   quantity           Int
   unitPriceInCents   Int      @map("unit_price_in_cents")
@@ -537,6 +644,7 @@ model CartItem {
   updatedAt          DateTime @updatedAt @map("updated_at")
 
   @@index([tenantId, cartId])
+  @@index([tenantId, variantId])
   @@map("cart_items")
 }
 
@@ -564,6 +672,13 @@ model Sale {
   totalInCents     Int           @map("total_in_cents")
   /// Points awarded on this sale (integer).
   loyaltyPointsEarned Int        @default(0) @map("loyalty_points_earned")
+  /// Points redeemed for discount on this sale (integer).
+  loyaltyPointsRedeemed Int      @default(0) @map("loyalty_points_redeemed")
+  /// Optional promo that produced (part of) discountInCents.
+  promoId          String?       @map("promo_id") @db.Uuid
+  promo            Promo?        @relation(fields: [promoId], references: [id], onDelete: SetNull)
+  /// Snapshot of voucher / promo code at sale time.
+  promoCode        String?       @map("promo_code")
   /// Wall-clock on the cashier device (offline). Used later for conflict ordering.
   clientCreatedAt  DateTime      @map("client_created_at")
   syncedAt         DateTime      @default(now()) @map("synced_at")
@@ -571,10 +686,12 @@ model Sale {
   updatedAt        DateTime      @updatedAt @map("updated_at")
   lines            SaleLine[]
   payments         SalePayment[]
+  paymentCharges   PaymentCharge[]
 
   @@index([tenantId, storeId, clientCreatedAt])
   @@index([tenantId, shiftId])
   @@index([tenantId, customerId])
+  @@index([tenantId, promoId])
   /// Dashboard / ops: filter completed sales by day without seq-scan.
   @@index([tenantId, status, clientCreatedAt])
   @@map("sales")
@@ -606,6 +723,8 @@ model SaleLine {
   sale                Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
   productId           String   @map("product_id") @db.Uuid
   product             Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  variantId           String?  @map("variant_id") @db.Uuid
+  variant             ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Restrict)
   productName         String   @map("product_name")
   quantity            Int
   unitPriceInCents    Int      @map("unit_price_in_cents")
@@ -615,19 +734,169 @@ model SaleLine {
   lineTotalInCents    Int      @map("line_total_in_cents")
   modifiersJson       Json?    @map("modifiers_json")
   guestIndex          Int      @default(1) @map("guest_index")
+  /// HPP / COGS snapshot (integer sen) from recipe BOM at sale time.
+  cogsInCents         Int      @default(0) @map("cogs_in_cents")
   createdAt           DateTime @default(now()) @map("created_at")
 
   @@index([tenantId, saleId])
   @@index([tenantId, productId])
+  @@index([tenantId, variantId])
   @@map("sale_lines")
 }
 
+// ---------------------------------------------------------------------------
+// Recipe / BOM — menu item → ingredient consumption + HPP (Odoo-style).
+// ---------------------------------------------------------------------------
+
+model Recipe {
+  id        String       @id @default(uuid()) @db.Uuid
+  tenantId  String       @map("tenant_id") @db.Uuid
+  tenant    Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productId String       @unique @map("product_id") @db.Uuid
+  product   Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  /// Output qty per batch (usually 1 serving).
+  yieldQty  Int          @default(1) @map("yield_qty")
+  note      String?
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+  lines     RecipeLine[]
+
+  @@index([tenantId])
+  @@map("recipes")
+}
+
+model RecipeLine {
+  id                 String   @id @default(uuid()) @db.Uuid
+  tenantId           String   @map("tenant_id") @db.Uuid
+  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  recipeId           String   @map("recipe_id") @db.Uuid
+  recipe             Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  ingredientProductId String  @map("ingredient_product_id") @db.Uuid
+  ingredient         Product  @relation("RecipeIngredient", fields: [ingredientProductId], references: [id], onDelete: Restrict)
+  /// Ingredient qty consumed per recipe yield (integer units).
+  qty                Int
+  /// Unit cost in sen for HPP calc (editable; refresh from last PO receive).
+  unitCostInCents    Int      @default(0) @map("unit_cost_in_cents")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@unique([tenantId, recipeId, ingredientProductId])
+  @@index([tenantId, recipeId])
+  @@map("recipe_lines")
+}
+
+// ---------------------------------------------------------------------------
+// Kitchen Display System (KDS) — station routing + ticket bump workflow.
+// ---------------------------------------------------------------------------
+
+model KitchenStation {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId   String   @map("store_id") @db.Uuid
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  code      String
+  name      String
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  products  Product[]
+  orderLines KitchenOrderLine[]
+  staffAssignments UserKitchenStation[]
+
+  @@unique([tenantId, storeId, code])
+  @@index([tenantId, storeId, sortOrder])
+  @@map("kitchen_stations")
+}
+
+/// Assigns KDS staff to one or more stations (BAR / KITCHEN / …) within a store.
+model UserKitchenStation {
+  id        String         @id @default(uuid()) @db.Uuid
+  tenantId  String         @map("tenant_id") @db.Uuid
+  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String         @map("user_id") @db.Uuid
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stationId String         @map("station_id") @db.Uuid
+  station   KitchenStation @relation(fields: [stationId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now()) @map("created_at")
+
+  @@unique([userId, stationId])
+  @@index([tenantId, userId])
+  @@index([tenantId, stationId])
+  @@map("user_kitchen_stations")
+}
+
+enum KitchenOrderStatus {
+  OPEN
+  DONE
+  CANCELLED
+}
+
+enum KitchenLineStatus {
+  PENDING
+  PREPARING
+  READY
+  DONE
+  CANCELLED
+}
+
+model KitchenOrder {
+  id             String             @id @default(uuid()) @db.Uuid
+  tenantId       String             @map("tenant_id") @db.Uuid
+  tenant         Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId        String             @map("store_id") @db.Uuid
+  store          Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  cartClientUuid String             @map("cart_client_uuid")
+  tableLabel     String?            @map("table_label")
+  status         KitchenOrderStatus @default(OPEN)
+  saleId         String?            @map("sale_id") @db.Uuid
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+  lines          KitchenOrderLine[]
+
+  @@index([tenantId, storeId, status, createdAt])
+  @@index([tenantId, cartClientUuid, status])
+  @@map("kitchen_orders")
+}
+
+model KitchenOrderLine {
+  id             String            @id @default(uuid()) @db.Uuid
+  tenantId       String            @map("tenant_id") @db.Uuid
+  tenant         Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orderId        String            @map("order_id") @db.Uuid
+  order          KitchenOrder      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  stationId      String            @map("station_id") @db.Uuid
+  station        KitchenStation    @relation(fields: [stationId], references: [id], onDelete: Restrict)
+  productId      String            @map("product_id") @db.Uuid
+  product        Product           @relation(fields: [productId], references: [id], onDelete: Restrict)
+  productName    String            @map("product_name")
+  quantity       Int
+  modifiersJson  Json?             @map("modifiers_json")
+  guestIndex     Int               @default(1) @map("guest_index")
+  /// Client-side line key for idempotent fire (cart item id).
+  clientLineId   String            @map("client_line_id")
+  status         KitchenLineStatus @default(PENDING)
+  firedAt        DateTime          @default(now()) @map("fired_at")
+  readyAt        DateTime?         @map("ready_at")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+
+  @@unique([tenantId, orderId, clientLineId])
+  @@index([tenantId, stationId, status, firedAt])
+  @@map("kitchen_order_lines")
+}
+
 enum StockTransferStatus {
+  /// Created, stock not yet removed from source.
+  DRAFT
+  /// Shipped: source decremented; goods not yet at destination.
+  IN_TRANSIT
   COMPLETED
   CANCELLED
 }
 
-/// Immediate inter-store stock move (ship+receive in one TX for MVP).
+/// Inter-store stock move. Prefer ship → in-transit → receive; `immediate` still supported.
 model StockTransfer {
   id              String              @id @default(uuid()) @db.Uuid
   tenantId        String              @map("tenant_id") @db.Uuid
@@ -636,14 +905,19 @@ model StockTransfer {
   fromStore       Store               @relation("TransferFromStore", fields: [fromStoreId], references: [id], onDelete: Restrict)
   toStoreId       String              @map("to_store_id") @db.Uuid
   toStore         Store               @relation("TransferToStore", fields: [toStoreId], references: [id], onDelete: Restrict)
-  status          StockTransferStatus @default(COMPLETED)
+  status          StockTransferStatus @default(DRAFT)
   note            String?
+  shippedAt       DateTime?           @map("shipped_at")
+  receivedAt      DateTime?           @map("received_at")
+  cancelledAt     DateTime?           @map("cancelled_at")
   createdByUserId String              @map("created_by_user_id") @db.Uuid
   createdBy       User                @relation("StockTransferActor", fields: [createdByUserId], references: [id], onDelete: Restrict)
   createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
   lines           StockTransferLine[]
 
   @@index([tenantId, createdAt])
+  @@index([tenantId, status, createdAt])
   @@index([tenantId, fromStoreId])
   @@index([tenantId, toStoreId])
   @@map("stock_transfers")
@@ -791,6 +1065,209 @@ model GoodsReceiptLine {
   @@index([tenantId, goodsReceiptId])
   @@index([tenantId, purchaseOrderLineId])
   @@map("goods_receipt_lines")
+}
+
+// ---------------------------------------------------------------------------
+// Promotions — voucher / automatic discount (integer sen or bps). Never float.
+// ---------------------------------------------------------------------------
+
+enum PromoType {
+  PERCENT
+  FIXED
+}
+
+enum PromoScope {
+  ALL
+  CATEGORY
+  PRODUCT
+}
+
+model Promo {
+  id                 String     @id @default(uuid()) @db.Uuid
+  tenantId           String     @map("tenant_id") @db.Uuid
+  tenant             Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Voucher code (uppercase). Unique per tenant when set.
+  code               String
+  name               String
+  type               PromoType
+  scope              PromoScope @default(ALL)
+  /// PERCENT: rate in basis points (1000 = 10%). Null for FIXED.
+  percentBps         Int?       @map("percent_bps")
+  /// FIXED: flat discount in integer sen. Null for PERCENT.
+  amountInCents      Int?       @map("amount_in_cents")
+  /// Cap for PERCENT discounts (integer sen).
+  maxDiscountInCents Int?       @map("max_discount_in_cents")
+  /// Minimum cart subtotal+tax before promo applies.
+  minSubtotalInCents Int        @default(0) @map("min_subtotal_in_cents")
+  categoryId         String?    @map("category_id") @db.Uuid
+  category           Category?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  productId          String?    @map("product_id") @db.Uuid
+  product            Product?   @relation(fields: [productId], references: [id], onDelete: SetNull)
+  startsAt           DateTime?  @map("starts_at")
+  endsAt             DateTime?  @map("ends_at")
+  usageLimit         Int?       @map("usage_limit")
+  usedCount          Int        @default(0) @map("used_count")
+  isActive           Boolean    @default(true) @map("is_active")
+  /// When false, loyalty redeem cannot stack on the same sale.
+  stackWithLoyalty   Boolean    @default(true) @map("stack_with_loyalty")
+  createdAt          DateTime   @default(now()) @map("created_at")
+  updatedAt          DateTime   @updatedAt @map("updated_at")
+  sales              Sale[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, isActive, startsAt, endsAt])
+  @@map("promos")
+}
+
+// ---------------------------------------------------------------------------
+// Payment charges — Midtrans / Xendit QRIS (or local static QR fallback).
+// ---------------------------------------------------------------------------
+
+enum PaymentProvider {
+  LOCAL_QRIS
+  MIDTRANS
+  XENDIT
+}
+
+enum PaymentChargeStatus {
+  PENDING
+  PAID
+  EXPIRED
+  FAILED
+  CANCELLED
+}
+
+model PaymentCharge {
+  id              String              @id @default(uuid()) @db.Uuid
+  tenantId        String              @map("tenant_id") @db.Uuid
+  tenant          Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId         String              @map("store_id") @db.Uuid
+  store           Store               @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  /// Linked after POS sale sync when payment settles.
+  saleId          String?             @map("sale_id") @db.Uuid
+  sale            Sale?               @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  /// Cart client UUID so cashier can poll before sale id exists.
+  clientUuid      String              @map("client_uuid")
+  provider        PaymentProvider
+  status          PaymentChargeStatus @default(PENDING)
+  amountInCents   Int                 @map("amount_in_cents")
+  /// Provider order / charge id (unique per tenant when set).
+  providerRef     String?             @map("provider_ref")
+  /// QRIS MPM string from PSP (or echoed local dynamic payload).
+  qrString        String?             @map("qr_string") @db.Text
+  deeplinkUrl     String?             @map("deeplink_url")
+  expiresAt       DateTime?           @map("expires_at")
+  paidAt          DateTime?           @map("paid_at")
+  rawWebhook      Json?               @map("raw_webhook")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  @@unique([tenantId, providerRef])
+  @@index([tenantId, clientUuid, status])
+  @@index([tenantId, storeId, createdAt])
+  @@index([tenantId, saleId])
+  @@map("payment_charges")
+}
+
+// ---------------------------------------------------------------------------
+// F&B table management — floor areas + dine-in tables (Moka-style).
+// Table status is derived from OPEN carts linked via Cart.tableId.
+// ---------------------------------------------------------------------------
+
+model TableArea {
+  id        String        @id @default(uuid()) @db.Uuid
+  tenantId  String        @map("tenant_id") @db.Uuid
+  tenant    Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId   String        @map("store_id") @db.Uuid
+  store     Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name      String
+  sortOrder Int           @default(0) @map("sort_order")
+  isActive  Boolean       @default(true) @map("is_active")
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+  tables    DiningTable[]
+
+  @@index([tenantId, storeId, sortOrder])
+  @@map("table_areas")
+}
+
+model DiningTable {
+  id        String     @id @default(uuid()) @db.Uuid
+  tenantId  String     @map("tenant_id") @db.Uuid
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId   String     @map("store_id") @db.Uuid
+  store     Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  areaId    String?    @map("area_id") @db.Uuid
+  area      TableArea? @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  code      String
+  name      String
+  capacity  Int        @default(4)
+  sortOrder Int        @default(0) @map("sort_order")
+  isActive  Boolean    @default(true) @map("is_active")
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+  carts     Cart[]
+
+  @@unique([tenantId, storeId, code])
+  @@index([tenantId, storeId, areaId, sortOrder])
+  @@map("dining_tables")
+}
+
+// ---------------------------------------------------------------------------
+// Stock opname — formal count session with variance → store stock adjust.
+// ---------------------------------------------------------------------------
+
+enum StockCountStatus {
+  DRAFT
+  COMPLETED
+  CANCELLED
+}
+
+model StockCountSession {
+  id                 String           @id @default(uuid()) @db.Uuid
+  tenantId           String           @map("tenant_id") @db.Uuid
+  tenant             Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId            String           @map("store_id") @db.Uuid
+  store              Store            @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  code               String
+  status             StockCountStatus @default(DRAFT)
+  note               String?
+  createdByUserId    String           @map("created_by_user_id") @db.Uuid
+  createdBy          User             @relation("StockCountActor", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  completedByUserId  String?          @map("completed_by_user_id") @db.Uuid
+  completedBy        User?            @relation("StockCountCompleter", fields: [completedByUserId], references: [id], onDelete: SetNull)
+  completedAt        DateTime?        @map("completed_at")
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
+  lines              StockCountLine[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, storeId, status, createdAt])
+  @@map("stock_count_sessions")
+}
+
+model StockCountLine {
+  id              String            @id @default(uuid()) @db.Uuid
+  tenantId        String            @map("tenant_id") @db.Uuid
+  tenant          Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sessionId       String            @map("session_id") @db.Uuid
+  session         StockCountSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  productId       String            @map("product_id") @db.Uuid
+  product         Product           @relation(fields: [productId], references: [id], onDelete: Restrict)
+  productSku      String            @map("product_sku")
+  productName     String            @map("product_name")
+  /// Snapshot of system on-hand at session start (integer units).
+  systemQty       Int               @map("system_qty")
+  /// Physical count entered by staff (null until counted).
+  countedQty      Int?              @map("counted_qty")
+  /// countedQty - systemQty after complete (integer).
+  varianceQty     Int?              @map("variance_qty")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+
+  @@unique([tenantId, sessionId, productId])
+  @@index([tenantId, sessionId])
+  @@map("stock_count_lines")
 }
 
 // ---------------------------------------------------------------------------
@@ -987,4 +1464,77 @@ model DailyProductSummary {
   @@unique([tenantId, storeId, productId, summaryDate])
   @@index([tenantId, summaryDate, quantitySold])
   @@map("daily_product_summaries")
+}
+
+// ---------------------------------------------------------------------------
+// Light GL — chart of accounts + posted journal entries (Accurate/Jurnal-ready).
+// All amounts INTEGER sen. Entries must balance (sum debit == sum credit).
+// ---------------------------------------------------------------------------
+
+enum GlAccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+enum JournalSourceType {
+  SALE
+  TRANSFER
+  STOCK_COUNT
+  GOODS_RECEIPT
+  MANUAL
+}
+
+model GlAccount {
+  id        String        @id @default(uuid()) @db.Uuid
+  tenantId  String        @map("tenant_id") @db.Uuid
+  tenant    Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code      String
+  name      String
+  type      GlAccountType
+  isActive  Boolean       @default(true) @map("is_active")
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+  lines     JournalEntryLine[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, type])
+  @@map("gl_accounts")
+}
+
+model JournalEntry {
+  id         String            @id @default(uuid()) @db.Uuid
+  tenantId   String            @map("tenant_id") @db.Uuid
+  tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sourceType JournalSourceType @map("source_type")
+  sourceId   String            @map("source_id")
+  memo       String?
+  postedAt   DateTime          @default(now()) @map("posted_at")
+  createdAt  DateTime          @default(now()) @map("created_at")
+  lines      JournalEntryLine[]
+
+  @@unique([tenantId, sourceType, sourceId])
+  @@index([tenantId, postedAt])
+  @@map("journal_entries")
+}
+
+model JournalEntryLine {
+  id             String       @id @default(uuid()) @db.Uuid
+  tenantId       String       @map("tenant_id") @db.Uuid
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  entryId        String       @map("entry_id") @db.Uuid
+  entry          JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  accountId      String       @map("account_id") @db.Uuid
+  account        GlAccount    @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  accountCode    String       @map("account_code")
+  debitInCents   Int          @default(0) @map("debit_in_cents")
+  creditInCents  Int          @default(0) @map("credit_in_cents")
+  memo           String?
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  @@index([tenantId, entryId])
+  @@index([tenantId, accountCode])
+  @@map("journal_entry_lines")
 }

@@ -11,6 +11,7 @@ export type SyncSaleLineInput = {
   quantity: number;
   unitPriceInCents: number;
   taxBps: number;
+  variantId?: string | null;
   modifierOptionIds?: string[];
   guestIndex?: number;
 };
@@ -39,6 +40,13 @@ export type SyncSaleInput = {
   discountInCents?: number;
   tipInCents?: number;
   totalInCents: number;
+  /** Optional voucher / promo applied on device (server re-validates). */
+  promoId?: string | null;
+  promoCode?: string | null;
+  /** Loyalty points to redeem (integer). Server converts via LOYALTY_POINT_VALUE_CENTS. */
+  loyaltyPointsRedeemed?: number;
+  /** Paid QRIS charge id (Midtrans/Xendit/local confirm). */
+  paymentChargeId?: string | null;
 };
 
 export type UpsertCartInput = {
@@ -47,6 +55,7 @@ export type UpsertCartInput = {
   cashierUserId?: string | null;
   customerId?: string | null;
   label?: string | null;
+  tableId?: string | null;
   parkedAt?: string | null;
   status?: 'OPEN' | 'CHECKED_OUT' | 'ABANDONED';
   /**
@@ -57,6 +66,7 @@ export type UpsertCartInput = {
   lines: Array<{
     productId: string;
     quantity: number;
+    variantId?: string | null;
     modifierOptionIds?: string[];
     guestIndex?: number;
   }>;

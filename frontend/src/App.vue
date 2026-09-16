@@ -20,6 +20,8 @@ const canHris = computed(() => auth.has('hris.employee.read'));
 const canDashboard = computed(() => auth.has('dashboard.read'));
 const canReports = computed(() => auth.has('shift.z_report'));
 const canAdmin = computed(() => auth.has('admin.access'));
+const canPos = computed(() => auth.has('pos.sale.create'));
+const canKitchen = computed(() => auth.has('kitchen.display'));
 const isPos = computed(() => route.path.startsWith('/pos'));
 const isLogin = computed(() => route.path.startsWith('/login'));
 
@@ -77,10 +79,18 @@ async function onStoreChange(event: Event): Promise<void> {
     >
       <template v-if="auth.isAuthenticated && !isLogin">
         <RouterLink
+          v-if="canPos"
           class="touch-target rounded-xl px-3 text-sm font-semibold text-slate-900 hover:bg-slate-100"
           to="/pos"
         >
           {{ t('app.nav.pos') }}
+        </RouterLink>
+        <RouterLink
+          v-if="canKitchen"
+          class="touch-target rounded-xl px-3 text-sm font-medium text-orange-800 hover:bg-orange-50"
+          to="/kitchen"
+        >
+          {{ t('app.nav.kitchen') }}
         </RouterLink>
         <RouterLink
           v-if="canDashboard"
@@ -113,7 +123,7 @@ async function onStoreChange(event: Event): Promise<void> {
         <RouterLink
           v-if="canAdmin"
           class="touch-target rounded-xl px-3 text-sm font-medium text-slate-700 hover:bg-slate-100"
-          to="/admin"
+          to="/admin/catalog"
         >
           {{ t('app.nav.admin') }}
         </RouterLink>

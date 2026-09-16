@@ -7,6 +7,7 @@
       "reports": "Laporan",
       "hris": "HRIS",
       "admin": "Admin",
+      "kitchen": "Dapur (KDS)",
       "runtime": "Runtime",
       "hrisDenied": "Kasir tidak punya akses HRIS",
       "adminDenied": "Kasir tidak punya akses Administrasi"
@@ -16,6 +17,8 @@
     "storeSwitchFailed": "Gagal ganti toko",
     "roles": {
       "cashier": "Kasir",
+      "kitchen": "Dapur",
+      "bar": "Bar / Minuman",
       "manager": "Manager",
       "admin": "Admin"
     },
@@ -121,6 +124,25 @@
       "park": "Hold",
       "parked": "Order di-hold"
     },
+    "view": {
+      "products": "Produk",
+      "tables": "Meja"
+    },
+    "tables": {
+      "hint": "Ketuk meja untuk buka order baru atau lanjutkan order aktif.",
+      "ungrouped": "Tanpa area",
+      "empty": "Belum ada meja — atur di Admin → Meja.",
+      "loadFailed": "Gagal memuat denah meja",
+      "status": {
+        "available": "Kosong",
+        "occupied": "Terisi",
+        "billing": "Tagihan"
+      },
+      "current": "Meja {code} · {name}",
+      "clear": "Lepas",
+      "opened": "Order meja {code} dibuka",
+      "resumed": "Order meja {code} dilanjutkan"
+    },
     "scan": {
       "added": "Scan: {name}",
       "notFound": "Barcode tidak dikenal: {code}",
@@ -153,11 +175,28 @@
       "qrisAmount": "Jumlah QRIS",
       "qrisAmountInvalid": "Jumlah QRIS tidak valid",
       "qrisDynamicBadge": "QR dinamis · nominal tertanam",
+      "qrisPspBadge": "QRIS {provider} · menunggu pembayaran",
       "qrisScanHint": "Minta pelanggan scan QR — nominal sudah terisi. Selesaikan setelah lunas.",
       "qrisBill": "Ref: {bill}",
       "qrisMissing": "QRIS toko belum dikonfigurasi. Isi payload statis di Admin → Toko.",
-      "qrisRenderError": "Gagal merender QR QRIS"
+      "qrisRenderError": "Gagal merender QR QRIS",
+      "qrisPaid": "Pembayaran QRIS terkonfirmasi",
+      "qrisConfirmLocal": "Konfirmasi sudah bayar",
+      "qrisCheckStatus": "Cek status bayar"
     },
+    "promo": {
+      "codePlaceholder": "Kode promo",
+      "apply": "Pakai",
+      "applied": "Promo diterapkan",
+      "invalid": "Promo tidak valid",
+      "noStackLoyalty": "Promo ini tidak bisa digabung dengan poin",
+      "needCustomer": "Pilih pelanggan dulu untuk tukar poin",
+      "insufficientPoints": "Poin tidak cukup",
+      "redeemPlaceholder": "Tukar poin (max {pts})",
+      "redeem": "Tukar",
+      "loyaltyOk": "Poin ditukar"
+    },
+    "discount": "Diskon",
     "receipt": {
       "title": "Preview nota",
       "subtitle": "Periksa struk, lalu cetak atau lewati",
@@ -356,10 +395,28 @@
   "admin": {
     "eyebrow": "Administrasi",
     "title": "Administrasi toko",
-    "subtitle": "Kelola katalog, staf, toko, dan audit trail. Hanya Manager / Admin.",
-    "denied": "Akses ditolak: kasir tidak boleh membuka Administrasi",
+    "subtitle": "Kelola katalog, inventori, outlet, tim, dan sistem. Supervisor punya akses terbatas.",
+    "denied": "Akses ditolak: peran Anda tidak boleh membuka bagian ini",
     "loadFailed": "Gagal memuat data admin",
     "saved": "Tersimpan",
+    "hubs": {
+      "catalog": "Katalog",
+      "inventory": "Inventori",
+      "outlet": "Outlet",
+      "team": "Tim",
+      "system": "Sistem"
+    },
+    "money": {
+      "hint": "Harga dalam Rupiah (bilangan bulat)"
+    },
+    "productType": "Tipe produk",
+    "kitchenStation": "Stasiun dapur",
+    "variants": {
+      "label": "varian",
+      "title": "Varian produk",
+      "add": "Tambah varian",
+      "created": "Varian ditambahkan"
+    },
     "tabs": {
       "products": "Produk",
       "categories": "Kategori",
@@ -370,6 +427,12 @@
       "transfer": "Transfer stok",
       "suppliers": "Supplier",
       "purchasing": "Pembelian",
+      "promos": "Promo",
+      "tables": "Meja",
+      "stockOpname": "Stok opname",
+      "recipes": "Resep / BOM",
+      "kitchen": "Stasiun dapur",
+      "gl": "Jurnal / GL",
       "edge": "Edge sync",
       "audit": "Audit trail"
     },
@@ -424,6 +487,7 @@
     "staffPinSet": "Set PIN",
     "staffPinInvalid": "PIN harus 4–8 digit angka",
     "staffCreated": "Staf ditambahkan",
+    "staffStations": "Stasiun KDS",
     "inventory": {
       "hint": "Hitung stok on-hand per outlet dan set harga khusus toko (override). Kosongkan override untuk kembali ke harga katalog.",
       "store": "Toko",
@@ -442,6 +506,18 @@
     },
     "emptyStores": "Belum ada toko.",
     "emptyAudit": "Belum ada log audit.",
+    "stores": {
+      "hint": "Profil toko, alamat, zona waktu, header/footer struk, dan QRIS.",
+      "address": "Alamat",
+      "phone": "Telepon",
+      "timezone": "Zona waktu",
+      "receiptHeader": "Header struk",
+      "receiptFooter": "Footer struk",
+      "save": "Simpan toko",
+      "saved": "Pengaturan toko disimpan",
+      "add": "Tambah toko",
+      "created": "Toko ditambahkan"
+    },
     "qrisHint": "Tempel string QRIS statis (EMVCo MPM) dari bank/PSP. Saat bayar, BonPOS otomatis ubah jadi QR dinamis dengan nominal transaksi (mirip Odoo).",
     "qrisPayload": "Payload QRIS (statis)",
     "qrisPlaceholder": "00020101021126…",
@@ -455,8 +531,15 @@
       "product": "Produk",
       "qty": "Qty",
       "note": "Catatan",
-      "submit": "Transfer sekarang",
+      "addLine": "Tambah baris",
+      "submit": "Kirim (in-transit)",
       "ok": "Stok ditransfer",
+      "ship": "Kirim",
+      "shipped": "Transfer dikirim (in-transit)",
+      "received": "Transfer diterima di tujuan",
+      "cancelled": "Transfer dibatalkan",
+      "receive": "Terima",
+      "cancel": "Batal",
       "empty": "Belum ada transfer."
     },
     "suppliers": {
@@ -465,6 +548,7 @@
       "name": "Nama",
       "phone": "Telepon",
       "email": "Email",
+      "address": "Alamat",
       "add": "Tambah supplier",
       "created": "Supplier ditambahkan",
       "saved": "Supplier disimpan",
@@ -473,7 +557,7 @@
       "activate": "Aktifkan"
     },
     "purchasing": {
-      "hint": "Buat PO ke supplier, konfirmasi, lalu terima barang (boleh parsial) ke stok toko. Biaya = bilangan bulat (sen).",
+      "hint": "Buat PO ke supplier, konfirmasi, lalu terima barang (boleh parsial) ke stok toko. Biaya = bilangan bulat Rupiah.",
       "supplier": "Supplier",
       "store": "Toko penerimaan",
       "product": "Produk",
@@ -504,6 +588,75 @@
       "receipts": "Penerimaan",
       "invalidLine": "Qty dan harga beli harus bilangan bulat (qty ≥ 1, harga ≥ 0)"
     },
+    "tables": {
+      "hint": "Atur area dan meja untuk F&B. Status meja otomatis dari order POS yang terbuka.",
+      "areaName": "Nama area",
+      "addArea": "Tambah area",
+      "addTable": "Tambah meja",
+      "noArea": "Tanpa area",
+      "capacity": "Kapasitas",
+      "areaCreated": "Area meja ditambahkan",
+      "tableCreated": "Meja ditambahkan",
+      "empty": "Belum ada meja."
+    },
+    "stockOpname": {
+      "hint": "Sesi hitung fisik stok per toko. Setelah selesai, selisih otomatis menyesuaikan on-hand.",
+      "start": "Mulai opname",
+      "created": "Sesi {code} dibuat",
+      "open": "Buka",
+      "backToList": "Daftar sesi",
+      "system": "Sistem",
+      "counted": "Hitung",
+      "variance": "Selisih",
+      "complete": "Selesai & terapkan",
+      "cancel": "Batalkan sesi",
+      "completed": "Opname selesai — stok diperbarui",
+      "cancelled": "Sesi opname dibatalkan",
+      "empty": "Belum ada sesi opname.",
+      "qtyInvalid": "Qty hitung harus bilangan bulat ≥ 0"
+    },
+    "recipes": {
+      "hint": "Resep/BOM menu → bahan baku. Saat checkout, stok bahan yang dipotong (bukan menu jadi). HPP dihitung dari unit cost × qty.",
+      "menuProduct": "Produk menu",
+      "ingredient": "Bahan baku",
+      "ingredients": "bahan",
+      "qty": "Qty bahan",
+      "unitCost": "Harga pokok (Rp)",
+      "addLine": "Tambah bahan",
+      "saved": "Resep disimpan",
+      "hppPreview": "HPP per porsi"
+    },
+    "kitchen": {
+      "hint": "Stasiun dapur untuk routing KDS. Assign stasiun ke produk menu — item otomatis muncul di layar dapur saat ditambah ke keranjang.",
+      "addStation": "Tambah stasiun",
+      "stationCreated": "Stasiun dapur ditambahkan",
+      "assign": "Assign stasiun",
+      "assigned": "Stasiun produk diperbarui",
+      "noStation": "Tanpa stasiun"
+    },
+    "promos": {
+      "hint": "Voucher diskon % (bps) atau nominal tetap. Kasir memasukkan kode di POS. 1000 bps = 10%.",
+      "code": "Kode",
+      "name": "Nama",
+      "percent": "Persen",
+      "fixed": "Nominal",
+      "percentBps": "Bps (1000=10%)",
+      "amount": "Nominal (Rp)",
+      "usageLimit": "Batas pemakaian",
+      "minSubtotal": "Min subtotal (Rp)",
+      "maxDiscount": "Max diskon (Rp)",
+      "add": "Tambah promo",
+      "created": "Promo dibuat",
+      "saved": "Promo disimpan",
+      "empty": "Belum ada promo.",
+      "deactivate": "Nonaktifkan",
+      "activate": "Aktifkan"
+    },
+    "gl": {
+      "hint": "Chart of accounts + jurnal terposting (otomatis saat penjualan). Siap mapping Accurate / Jurnal.id.",
+      "emptyAccounts": "Belum ada akun — buka Admin setelah seed.",
+      "emptyEntries": "Belum ada jurnal."
+    },
     "edge": {
       "enabled": "Aktif",
       "pending": "Antrian outbox",
@@ -512,6 +665,20 @@
       "push": "Push outbox sekarang",
       "pushOk": "Edge push selesai",
       "unavailable": "Status edge sync tidak tersedia"
+    }
+  },
+  "kitchen": {
+    "title": "Kitchen Display",
+    "subtitle": "Ticket order aktif — tap untuk update status (Moka-style bump bar).",
+    "empty": "Belum ada order dapur.",
+    "loadFailed": "Gagal memuat ticket dapur",
+    "bumpFailed": "Gagal update status",
+    "noStore": "Pilih toko / login ulang",
+    "autoRefresh": "Auto-refresh 8 detik",
+    "status": {
+      "PREPARING": "Masak",
+      "READY": "Siap",
+      "DONE": "Selesai"
     }
   },
   "status": {

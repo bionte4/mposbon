@@ -77,7 +77,20 @@ export const useCatalogStore = defineStore('catalog', () => {
       taxBps: Number(row.taxBps ?? 0),
       stockQty: Number(row.stockQty ?? 0),
       isActive: Boolean(row.isActive),
+      productType: row.productType as CachedProduct['productType'],
+      kitchenStationId:
+        row.kitchenStationId == null ? null : String(row.kitchenStationId),
       modifierGroups,
+      variants: Array.isArray(row.variants)
+        ? (row.variants as Record<string, unknown>[]).map((v) => ({
+            id: String(v.id),
+            sku: String(v.sku),
+            name: String(v.name),
+            unitPriceInCents: Number(v.unitPriceInCents),
+            stockQty: Number(v.stockQty ?? 0),
+            sortOrder: Number(v.sortOrder ?? 0),
+          }))
+        : [],
     };
   }
 
@@ -138,6 +151,7 @@ export const useCatalogStore = defineStore('catalog', () => {
         email: bootstrap.cashier.email,
         role: bootstrap.cashier.role as StaffRole,
         permissions: bootstrap.cashier.permissions,
+        kitchenStationIds: auth.staff?.kitchenStationIds ?? [],
       });
     }
 

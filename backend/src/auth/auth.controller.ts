@@ -23,6 +23,7 @@ export class AuthController {
       role: user.role,
       permissions: user.permissions,
       tenantId: user.tenantId,
+      kitchenStationIds: user.kitchenStationIds,
     };
   }
 }

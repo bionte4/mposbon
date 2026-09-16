@@ -14,6 +14,13 @@ import { AdminModule } from './admin/admin.module';
 import { CustomersModule } from './customers/customers.module';
 import { EdgeSyncModule } from './edge-sync/edge-sync.module';
 import { PurchasingModule } from './purchasing/purchasing.module';
+import { PromotionsModule } from './promotions/promotions.module';
+import { PaymentsModule } from './payments/payments.module';
+import { TablesModule } from './tables/tables.module';
+import { StockCountModule } from './stock-count/stock-count.module';
+import { RecipesModule } from './recipes/recipes.module';
+import { KitchenModule } from './kitchen/kitchen.module';
+import { GlModule } from './gl/gl.module';
 
 @Module({
   imports: [
@@ -32,6 +39,13 @@ import { PurchasingModule } from './purchasing/purchasing.module';
     CustomersModule,
     EdgeSyncModule,
     PurchasingModule,
+    PromotionsModule,
+    PaymentsModule,
+    TablesModule,
+    StockCountModule,
+    RecipesModule,
+    KitchenModule,
+    GlModule,
   ],
 })
 export class AppModule {}

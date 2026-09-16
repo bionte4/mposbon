@@ -44,11 +44,22 @@ export type SyncSalePayload = {
     amountTenderedInCents?: number;
   }>;
   clientCreatedAt: string;
-  lines: Array<{ productId: string; quantity: number; modifierOptionIds?: string[] }>;
+  lines: Array<{
+    productId: string;
+    quantity: number;
+    variantId?: string | null;
+    modifierOptionIds?: string[];
+    guestIndex?: number;
+  }>;
   subtotalInCents: number;
   taxInCents: number;
   discountInCents?: number;
+  tipInCents?: number;
   totalInCents: number;
+  promoId?: string | null;
+  promoCode?: string | null;
+  loyaltyPointsRedeemed?: number;
+  paymentChargeId?: string | null;
 };
 
 export type UpsertCartPayload = {
@@ -57,11 +68,18 @@ export type UpsertCartPayload = {
   cashierUserId?: string | null;
   customerId?: string | null;
   label?: string | null;
+  tableId?: string | null;
   parkedAt?: string | null;
   status?: 'OPEN' | 'CHECKED_OUT' | 'ABANDONED';
   /** Device wall-clock for last-write-wins on the server. */
   clientUpdatedAt?: string;
-  lines: Array<{ productId: string; quantity: number; modifierOptionIds?: string[] }>;
+  lines: Array<{
+    productId: string;
+    quantity: number;
+    variantId?: string | null;
+    modifierOptionIds?: string[];
+    guestIndex?: number;
+  }>;
 };
 
 export type ZReport = {
@@ -125,6 +143,41 @@ export function fetchBootstrap(storeId?: string | null): Promise<PosBootstrap> {
 
 export function postCart(payload: UpsertCartPayload) {
   return apiPost('/pos/carts', payload);
+}
+
+export type RemoteOpenCart = {
+  clientUuid: string;
+  tenantId: string;
+  storeId: string;
+  cashierUserId: string | null;
+  customerId: string | null;
+  label: string | null;
+  tableId: string | null;
+  parkedAt: string | null;
+  status: 'OPEN';
+  subtotalInCents: number;
+  taxInCents: number;
+  totalInCents: number;
+  updatedAt: string;
+  table: { id: string; code: string; name: string } | null;
+  customer: { id: string; name: string } | null;
+  items: Array<{
+    id: string;
+    productId: string;
+    productName: string;
+    quantity: number;
+    unitPriceInCents: number;
+    taxBps: number;
+    taxInCents: number;
+    lineSubtotalInCents: number;
+    lineTotalInCents: number;
+    modifiersJson: Array<{ optionId: string; name: string; priceDeltaInCents: number }> | null;
+    guestIndex: number;
+  }>;
+};
+
+export function fetchOpenCart(clientUuid: string): Promise<RemoteOpenCart> {
+  return apiGet(`/pos/carts/${encodeURIComponent(clientUuid)}`);
 }
 
 export function postSaleSync(payload: SyncSalePayload) {

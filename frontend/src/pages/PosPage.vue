@@ -7,6 +7,7 @@ import ModifierPickerModal from '../components/ModifierPickerModal.vue';
 import ReceiptPreviewPanel from '../components/ReceiptPreviewPanel.vue';
 import SupervisorPinModal from '../components/SupervisorPinModal.vue';
 import SwipeRevealRow from '../components/SwipeRevealRow.vue';
+import TableFloorPanel from '../components/TableFloorPanel.vue';
 import VirtualProductGrid from '../components/VirtualProductGrid.vue';
 import { useBarcodeScanner } from '../composables/useBarcodeScanner';
 import { useSwipe } from '../composables/useSwipe';
@@ -27,13 +28,19 @@ import {
   removeCartItemAuthorized,
   voidSale,
 } from '../services/pos-api.service';
+import type { FloorTable } from '../services/tables-api.service';
+import { fireToKitchen } from '../services/kitchen-api.service';
 import { createCustomer, searchCustomers } from '../services/customers-api.service';
+import { previewPromo } from '../services/promo-api.service';
 import { useAuthStore } from '../stores/auth.store';
 import { useCatalogStore } from '../stores/catalog.store';
 import { useCartStore } from '../stores/cart.store';
 import { useShiftStore } from '../stores/shift.store';
 import { useSyncStore } from '../stores/sync.store';
 import { useToastStore } from '../stores/toast.store';
+
+/** Must match backend LOYALTY_POINT_VALUE_CENTS (default Rp 100 / point). */
+const LOYALTY_POINT_VALUE_CENTS = 100;
 
 const { t } = useI18n();
 const catalog = useCatalogStore();
@@ -59,11 +66,18 @@ const showCheckout = ref(false);
 const payGuest = ref<number | null>(null);
 const drawerMode = ref<'drop' | 'midCount' | null>(null);
 const modifierProduct = ref<CachedProduct | null>(null);
+const variantProduct = ref<CachedProduct | null>(null);
+const pendingVariantId = ref<string | null>(null);
 const holdLabel = ref('');
 const showHeld = ref(false);
+const posView = ref<'products' | 'tables'>('products');
+const tableFloorRef = ref<InstanceType<typeof TableFloorPanel> | null>(null);
 const showCartTools = ref(false);
 const customerQuery = ref('');
 const customerHits = ref<PosCustomer[]>([]);
+const customerPoints = ref(0);
+const promoCodeInput = ref('');
+const loyaltyRedeemInput = ref(0);
 const pinAction = ref<'drawer' | 'void' | 'refund' | 'remove' | null>(null);
 const pendingRemove = ref<{
   itemId: string;
@@ -90,19 +104,67 @@ useBarcodeScanner({
   },
 });
 
-function onProductTap(product: CachedProduct): void {
+async function fireKitchenItem(
+  product: CachedProduct,
+  item: { id: string; productName: string; quantity: number; guestIndex: number; modifiers: ModifierSnapshot[] },
+): Promise<void> {
+  if (!product.kitchenStationId || !session.value || !cart.value) return;
+  try {
+    await fireToKitchen({
+      storeId: session.value.storeId,
+      cartClientUuid: cart.value.clientUuid,
+      tableLabel: cart.value.label,
+      lines: [
+        {
+          clientLineId: item.id,
+          productId: product.id,
+          productName: item.productName,
+          quantity: item.quantity,
+          guestIndex: item.guestIndex,
+          modifiers: item.modifiers,
+        },
+      ],
+    });
+  } catch {
+    // Kitchen fire is best-effort; sale still works if KDS offline.
+  }
+}
+
+async function onProductTap(product: CachedProduct): Promise<void> {
   if (!shiftOpen.value) return;
+  if (product.variants?.length) {
+    variantProduct.value = product;
+    return;
+  }
   if (product.modifierGroups?.length) {
     modifierProduct.value = product;
     return;
   }
-  void cartStore.addProduct(product.id);
+  const item = await cartStore.addProduct(product.id);
+  if (item) await fireKitchenItem(product, item);
 }
 
-function onModifiersConfirm(mods: ModifierSnapshot[]): void {
+async function onVariantPick(variantId: string): Promise<void> {
+  const product = variantProduct.value;
+  variantProduct.value = null;
+  if (!product) return;
+  if (product.modifierGroups?.length) {
+    pendingVariantId.value = variantId;
+    modifierProduct.value = product;
+    return;
+  }
+  const item = await cartStore.addProduct(product.id, [], variantId);
+  if (item) await fireKitchenItem(product, item);
+}
+
+async function onModifiersConfirm(mods: ModifierSnapshot[]): Promise<void> {
   const product = modifierProduct.value;
+  const variantId = pendingVariantId.value;
   modifierProduct.value = null;
-  if (product) void cartStore.addProduct(product.id, mods);
+  pendingVariantId.value = null;
+  if (!product) return;
+  const item = await cartStore.addProduct(product.id, mods, variantId);
+  if (item) await fireKitchenItem(product, item);
 }
 
 async function searchCustomer(): Promise<void> {
@@ -119,6 +181,7 @@ async function addCustomerQuick(): Promise<void> {
   try {
     const row = await createCustomer({ name: phone, phone });
     await cartStore.setCustomer({ id: row.id, name: row.name });
+    customerPoints.value = row.loyaltyPoints ?? 0;
     customerHits.value = [];
     customerQuery.value = '';
     toast.success(t('pos.customer.attached'), row.name);
@@ -127,11 +190,115 @@ async function addCustomerQuick(): Promise<void> {
   }
 }
 
+async function applyPromoCode(): Promise<void> {
+  if (!cart.value?.items.length) return;
+  const code = promoCodeInput.value.trim().toUpperCase();
+  if (!code) {
+    await cartStore.clearDiscount();
+    loyaltyRedeemInput.value = 0;
+    return;
+  }
+  try {
+    const lines = cart.value.items.map((item) => {
+      const product = catalog.productById(item.productId);
+      return {
+        productId: item.productId,
+        categoryId: product?.categoryId ?? null,
+        quantity: item.quantity,
+        lineSubtotalInCents: item.lineSubtotalInCents,
+        taxInCents: item.taxInCents,
+      };
+    });
+    const preview = await previewPromo({ code, lines });
+    if (!preview.promo || preview.discountInCents < 1) {
+      toast.error(t('pos.promo.invalid'));
+      return;
+    }
+    const loyaltyPts = cart.value.loyaltyPointsRedeemed ?? 0;
+    if (!preview.stackWithLoyalty && loyaltyPts > 0) {
+      toast.error(t('pos.promo.noStackLoyalty'));
+      return;
+    }
+    const loyaltyDiscount = loyaltyPts * LOYALTY_POINT_VALUE_CENTS;
+    await cartStore.applyDiscount({
+      discountInCents: preview.discountInCents + loyaltyDiscount,
+      promoId: preview.promo.id,
+      promoCode: preview.promo.code,
+      loyaltyPointsRedeemed: loyaltyPts,
+    });
+    promoCodeInput.value = preview.promo.code;
+    toast.success(t('pos.promo.applied'), formatIdrFromCents(preview.discountInCents));
+  } catch (error) {
+    toast.error(t('pos.promo.invalid'), parseApiError(error).message);
+  }
+}
+
+async function applyLoyaltyRedeem(): Promise<void> {
+  if (!cart.value) return;
+  if (!cart.value.customerId) {
+    toast.error(t('pos.promo.needCustomer'));
+    return;
+  }
+  const pts = Math.max(0, Math.trunc(loyaltyRedeemInput.value));
+  if (pts > customerPoints.value) {
+    toast.error(t('pos.promo.insufficientPoints'));
+    return;
+  }
+  const loyaltyDiscount = pts * LOYALTY_POINT_VALUE_CENTS;
+  let promoDiscount = 0;
+  if (cart.value.promoCode) {
+    const lines = cart.value.items.map((item) => {
+      const product = catalog.productById(item.productId);
+      return {
+        productId: item.productId,
+        categoryId: product?.categoryId ?? null,
+        quantity: item.quantity,
+        lineSubtotalInCents: item.lineSubtotalInCents,
+        taxInCents: item.taxInCents,
+      };
+    });
+    const preview = await previewPromo({ code: cart.value.promoCode, lines });
+    if (preview.promo && !preview.stackWithLoyalty && pts > 0) {
+      toast.error(t('pos.promo.noStackLoyalty'));
+      return;
+    }
+    promoDiscount = preview.discountInCents;
+  }
+  await cartStore.applyDiscount({
+    discountInCents: promoDiscount + loyaltyDiscount,
+    promoId: cart.value.promoId,
+    promoCode: cart.value.promoCode,
+    loyaltyPointsRedeemed: pts,
+  });
+  toast.success(t('pos.promo.loyaltyOk'), formatIdrFromCents(loyaltyDiscount));
+}
+
 async function parkCart(): Promise<void> {
   if (!cart.value?.items.length) return;
   await cartStore.park(holdLabel.value || undefined);
   holdLabel.value = '';
   toast.success(t('pos.hold.parked'));
+  tableFloorRef.value?.reload();
+}
+
+async function onTableSelect(table: FloorTable): Promise<void> {
+  if (busy.value) return;
+  if (!shiftOpen.value) {
+    toast.warning(t('pos.shiftClosed'), t('pos.errors.needClockIn'));
+    return;
+  }
+  busy.value = true;
+  try {
+    await cartStore.openTable(table);
+    posView.value = 'products';
+    toast.success(
+      table.activeCart ? t('pos.tables.resumed', { code: table.code }) : t('pos.tables.opened', { code: table.code }),
+    );
+  } catch (error) {
+    toast.error(parseApiError(error));
+  } finally {
+    busy.value = false;
+  }
 }
 
 const visibleProducts = computed(() => {
@@ -221,6 +388,7 @@ async function onCheckoutConfirm(payload: {
   paymentMethod: PaymentMethod;
   amountTenderedInCents?: number;
   tipInCents?: number;
+  paymentChargeId?: string;
   payments: Array<{
     paymentMethod: Exclude<PaymentMethod, 'SPLIT'>;
     amountInCents: number;
@@ -238,6 +406,7 @@ async function onCheckoutConfirm(payload: {
       tipInCents: payload.tipInCents,
       guestIndex: guest ?? undefined,
       payments: payload.payments,
+      paymentChargeId: payload.paymentChargeId,
     });
     lastSaleId.value = sale.id;
     toast.success(
@@ -482,8 +651,39 @@ async function onPinConfirm(pin: string): Promise<void> {
       v-if="modifierProduct"
       :product="modifierProduct"
       @confirm="onModifiersConfirm"
-      @cancel="modifierProduct = null"
+      @cancel="modifierProduct = null; pendingVariantId = null"
     />
+    <div
+      v-if="variantProduct"
+      class="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-4 sm:items-center"
+      @click.self="variantProduct = null"
+    >
+      <div class="w-full max-w-md rounded-3xl bg-white p-5 shadow-xl">
+        <h2 class="text-lg font-bold">{{ variantProduct.name }}</h2>
+        <p class="mb-3 text-sm text-slate-500">Pilih varian</p>
+        <div class="grid gap-2">
+          <button
+            v-for="v in variantProduct.variants"
+            :key="v.id"
+            type="button"
+            class="min-h-12 rounded-2xl bg-slate-900 px-4 text-left text-sm font-semibold text-white"
+            @click="onVariantPick(v.id)"
+          >
+            {{ v.name }}
+            <span class="float-right font-normal opacity-90">
+              {{ formatIdrFromCents(v.unitPriceInCents) }}
+            </span>
+          </button>
+        </div>
+        <button
+          type="button"
+          class="mt-3 min-h-11 w-full rounded-2xl bg-slate-100 text-sm font-semibold"
+          @click="variantProduct = null"
+        >
+          {{ t('common.cancel') }}
+        </button>
+      </div>
+    </div>
     <SupervisorPinModal
       v-if="pinAction"
       :title="pinTitle"
@@ -610,37 +810,65 @@ async function onPinConfirm(pin: string): Promise<void> {
         {{ formatIdrFromCents(lastZReport.drawer.discrepancyInCents ?? 0) }}
       </p>
 
-      <div
-        class="mb-4 flex gap-2 overflow-x-auto pb-1"
-        v-on="categorySwipe.handlers"
-      >
+      <div class="mb-4 flex gap-2">
         <button
-          class="touch-target shrink-0 rounded-2xl px-5 text-base font-semibold"
-          :class="selectedCategory === 'all' ? 'bg-slate-900 text-white' : 'bg-white text-slate-800'"
           type="button"
-          @click="selectedCategory = 'all'"
+          class="touch-target rounded-2xl px-5 text-base font-semibold"
+          :class="posView === 'products' ? 'bg-slate-900 text-white' : 'bg-white text-slate-800'"
+          @click="posView = 'products'"
         >
-          {{ t('common.all') }}
+          {{ t('pos.view.products') }}
         </button>
         <button
-          v-for="category in categories"
-          :key="category.id"
-          class="touch-target shrink-0 rounded-2xl px-5 text-base font-semibold"
-          :class="selectedCategory === category.id ? 'bg-slate-900 text-white' : 'bg-white text-slate-800'"
           type="button"
-          @click="selectedCategory = category.id"
+          class="touch-target rounded-2xl px-5 text-base font-semibold"
+          :class="posView === 'tables' ? 'bg-violet-700 text-white' : 'bg-white text-slate-800'"
+          @click="posView = 'tables'"
         >
-          {{ category.name }}
+          {{ t('pos.view.tables') }}
         </button>
       </div>
-      <p class="mb-2 hidden text-xs text-slate-400 sm:block lg:hidden">
-        {{ t('pos.swipe.categoryHint') }}
-      </p>
 
-      <VirtualProductGrid
-        :products="visibleProducts"
-        :disabled="!shiftOpen"
-        @select="onProductTap"
+      <template v-if="posView === 'products'">
+        <div
+          class="mb-4 flex gap-2 overflow-x-auto pb-1"
+          v-on="categorySwipe.handlers"
+        >
+          <button
+            class="touch-target shrink-0 rounded-2xl px-5 text-base font-semibold"
+            :class="selectedCategory === 'all' ? 'bg-slate-900 text-white' : 'bg-white text-slate-800'"
+            type="button"
+            @click="selectedCategory = 'all'"
+          >
+            {{ t('common.all') }}
+          </button>
+          <button
+            v-for="category in categories"
+            :key="category.id"
+            class="touch-target shrink-0 rounded-2xl px-5 text-base font-semibold"
+            :class="selectedCategory === category.id ? 'bg-slate-900 text-white' : 'bg-white text-slate-800'"
+            type="button"
+            @click="selectedCategory = category.id"
+          >
+            {{ category.name }}
+          </button>
+        </div>
+        <p class="mb-2 hidden text-xs text-slate-400 sm:block lg:hidden">
+          {{ t('pos.swipe.categoryHint') }}
+        </p>
+
+        <VirtualProductGrid
+          :products="visibleProducts"
+          :disabled="!shiftOpen"
+          @select="onProductTap"
+        />
+      </template>
+
+      <TableFloorPanel
+        v-else-if="session?.storeId"
+        ref="tableFloorRef"
+        :store-id="session.storeId"
+        @select="onTableSelect"
       />
     </section>
 
@@ -652,6 +880,8 @@ async function onPinConfirm(pin: string): Promise<void> {
         :total-in-cents="checkoutTotal"
         :qris-payload="session?.qrisPayload"
         :bill-number="cart?.clientUuid?.slice(0, 8) ?? null"
+        :store-id="session?.storeId ?? ''"
+        :client-uuid="cart?.clientUuid ?? ''"
         @confirm="onCheckoutConfirm"
         @cancel="showCheckout = false; payGuest = null"
       />
@@ -669,6 +899,12 @@ async function onPinConfirm(pin: string): Promise<void> {
         <div class="min-w-0">
           <h2 class="text-lg font-semibold sm:text-xl">{{ t('pos.cart') }}</h2>
           <p class="truncate text-xs text-slate-500 sm:text-sm">{{ session?.storeName }}</p>
+          <p v-if="cart?.tableCode" class="mt-0.5 text-xs font-semibold text-violet-800">
+            {{ t('pos.tables.current', { code: cart.tableCode, name: cart.tableName ?? '' }) }}
+            <button type="button" class="ml-1 underline" @click="cartStore.clearTable()">
+              {{ t('pos.tables.clear') }}
+            </button>
+          </p>
         </div>
         <span
           v-if="cartItemCount"
@@ -705,7 +941,12 @@ async function onPinConfirm(pin: string): Promise<void> {
             <button
               type="button"
               class="w-full rounded-xl bg-slate-50 px-3 py-2 text-left hover:bg-slate-100"
-              @click="cartStore.setCustomer({ id: c.id, name: c.name }); customerHits = []; customerQuery = ''"
+              @click="
+                cartStore.setCustomer({ id: c.id, name: c.name });
+                customerPoints = c.loyaltyPoints ?? 0;
+                customerHits = [];
+                customerQuery = '';
+              "
             >
               {{ c.name }}
               <span class="text-slate-500">· {{ c.phone || '—' }} · {{ c.loyaltyPoints }} pts</span>
@@ -785,6 +1026,40 @@ async function onPinConfirm(pin: string): Promise<void> {
 
       <!-- Compact checkout dock: totals + pay always visible; tools collapsible -->
       <div class="pos-cart-dock space-y-2.5">
+        <div class="grid grid-cols-[1fr_auto] gap-1.5">
+          <input
+            v-model="promoCodeInput"
+            class="min-h-10 rounded-xl border border-slate-300 px-2 text-sm uppercase"
+            :placeholder="t('pos.promo.codePlaceholder')"
+            @keyup.enter="applyPromoCode"
+          />
+          <button
+            type="button"
+            class="min-h-10 rounded-xl bg-slate-900 px-3 text-sm font-semibold text-white"
+            :disabled="!cart?.items.length"
+            @click="applyPromoCode"
+          >
+            {{ t('pos.promo.apply') }}
+          </button>
+        </div>
+        <div v-if="cart?.customerId" class="grid grid-cols-[1fr_auto] gap-1.5">
+          <input
+            v-model.number="loyaltyRedeemInput"
+            class="min-h-10 rounded-xl border border-slate-300 px-2 text-sm tabular-nums"
+            type="number"
+            min="0"
+            step="1"
+            :placeholder="t('pos.promo.redeemPlaceholder', { pts: customerPoints })"
+          />
+          <button
+            type="button"
+            class="min-h-10 rounded-xl bg-amber-600 px-3 text-sm font-semibold text-white"
+            @click="applyLoyaltyRedeem"
+          >
+            {{ t('pos.promo.redeem') }}
+          </button>
+        </div>
+
         <div class="rounded-2xl bg-slate-50 px-3 py-2.5 text-sm">
           <div class="flex justify-between text-slate-600">
             <span>{{ t('pos.subtotal') }}</span>
@@ -793,6 +1068,16 @@ async function onPinConfirm(pin: string): Promise<void> {
           <div class="mt-0.5 flex justify-between text-slate-600">
             <span>{{ t('pos.tax') }}</span>
             <span class="tabular-nums">{{ formatIdrFromCents(cart?.taxInCents ?? 0) }}</span>
+          </div>
+          <div
+            v-if="cart?.discountInCents"
+            class="mt-0.5 flex justify-between text-emerald-800"
+          >
+            <span>
+              {{ t('pos.discount') }}
+              <span v-if="cart.promoCode" class="text-xs">({{ cart.promoCode }})</span>
+            </span>
+            <span class="tabular-nums">-{{ formatIdrFromCents(cart.discountInCents) }}</span>
           </div>
           <div class="mt-1.5 flex items-baseline justify-between border-t border-slate-200 pt-1.5 text-lg font-bold">
             <span>{{ t('pos.total') }}</span>

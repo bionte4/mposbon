@@ -23,6 +23,15 @@ export type CachedModifierGroup = {
   options: CachedModifierOption[];
 };
 
+export type CachedProductVariant = {
+  id: string;
+  sku: string;
+  name: string;
+  unitPriceInCents: number;
+  stockQty: number;
+  sortOrder: number;
+};
+
 export type CachedProduct = {
   id: string;
   tenantId: string;
@@ -34,7 +43,10 @@ export type CachedProduct = {
   taxBps: number;
   stockQty: number;
   isActive: boolean;
+  productType?: 'RETAIL' | 'MENU' | 'INGREDIENT';
+  kitchenStationId?: string | null;
   modifierGroups: CachedModifierGroup[];
+  variants: CachedProductVariant[];
 };
 
 export type ModifierSnapshot = {
@@ -46,6 +58,7 @@ export type ModifierSnapshot = {
 export type LocalCartItem = {
   id: string;
   productId: string;
+  variantId?: string | null;
   productName: string;
   quantity: number;
   unitPriceInCents: number;
@@ -66,12 +79,19 @@ export type LocalCart = {
   customerId: string | null;
   customerName: string | null;
   label: string | null;
+  tableId: string | null;
+  tableCode: string | null;
+  tableName: string | null;
   parkedAt: string | null;
   status: 'OPEN' | 'CHECKED_OUT' | 'ABANDONED';
   items: LocalCartItem[];
   subtotalInCents: number;
   taxInCents: number;
+  discountInCents: number;
   totalInCents: number;
+  promoId: string | null;
+  promoCode: string | null;
+  loyaltyPointsRedeemed: number;
   updatedAt: string;
 };
 
@@ -90,6 +110,10 @@ export type LocalSale = {
   discountInCents: number;
   tipInCents: number;
   totalInCents: number;
+  promoId?: string | null;
+  promoCode?: string | null;
+  loyaltyPointsRedeemed?: number;
+  paymentChargeId?: string | null;
   syncStatus: 'pending' | 'synced' | 'error';
   lines: LocalCartItem[];
 };

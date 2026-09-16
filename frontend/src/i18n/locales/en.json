@@ -7,6 +7,7 @@
       "reports": "Reports",
       "hris": "HRIS",
       "admin": "Admin",
+      "kitchen": "Kitchen (KDS)",
       "runtime": "Runtime",
       "hrisDenied": "Cashiers cannot access HRIS",
       "adminDenied": "Cashiers cannot access Administration"
@@ -16,6 +17,8 @@
     "storeSwitchFailed": "Failed to switch store",
     "roles": {
       "cashier": "Cashier",
+      "kitchen": "Kitchen",
+      "bar": "Bar / Drinks",
       "manager": "Manager",
       "admin": "Admin"
     },
@@ -121,6 +124,25 @@
       "park": "Hold",
       "parked": "Order held"
     },
+    "view": {
+      "products": "Products",
+      "tables": "Tables"
+    },
+    "tables": {
+      "hint": "Tap a table to start a new order or resume an active one.",
+      "ungrouped": "No area",
+      "empty": "No tables yet — configure in Admin → Tables.",
+      "loadFailed": "Failed to load table floor",
+      "status": {
+        "available": "Available",
+        "occupied": "Occupied",
+        "billing": "Billing"
+      },
+      "current": "Table {code} · {name}",
+      "clear": "Unassign",
+      "opened": "Table {code} order opened",
+      "resumed": "Table {code} order resumed"
+    },
     "scan": {
       "added": "Scanned: {name}",
       "notFound": "Unknown barcode: {code}",
@@ -153,11 +175,28 @@
       "qrisAmount": "QRIS amount",
       "qrisAmountInvalid": "Invalid QRIS amount",
       "qrisDynamicBadge": "Dynamic QR · amount embedded",
+      "qrisPspBadge": "QRIS {provider} · awaiting payment",
       "qrisScanHint": "Ask the customer to scan — amount is pre-filled. Complete once paid.",
       "qrisBill": "Ref: {bill}",
       "qrisMissing": "Store QRIS is not configured. Set the static payload in Admin → Stores.",
-      "qrisRenderError": "Failed to render QRIS QR"
+      "qrisRenderError": "Failed to render QRIS QR",
+      "qrisPaid": "QRIS payment confirmed",
+      "qrisConfirmLocal": "Confirm customer paid",
+      "qrisCheckStatus": "Check payment status"
     },
+    "promo": {
+      "codePlaceholder": "Promo code",
+      "apply": "Apply",
+      "applied": "Promo applied",
+      "invalid": "Invalid promo",
+      "noStackLoyalty": "This promo cannot stack with loyalty points",
+      "needCustomer": "Select a customer to redeem points",
+      "insufficientPoints": "Not enough points",
+      "redeemPlaceholder": "Redeem points (max {pts})",
+      "redeem": "Redeem",
+      "loyaltyOk": "Points redeemed"
+    },
+    "discount": "Discount",
     "receipt": {
       "title": "Receipt preview",
       "subtitle": "Review the slip, then print or skip",
@@ -356,10 +395,28 @@
   "admin": {
     "eyebrow": "Administration",
     "title": "Store administration",
-    "subtitle": "Manage catalog, staff, stores, and the audit trail. Managers / Admins only.",
-    "denied": "Access denied: cashiers cannot open Administration",
+    "subtitle": "Manage catalog, inventory, outlets, team, and system. Supervisors have limited access.",
+    "denied": "Access denied: your role cannot open this section",
     "loadFailed": "Failed to load admin data",
     "saved": "Saved",
+    "hubs": {
+      "catalog": "Catalog",
+      "inventory": "Inventory",
+      "outlet": "Outlet",
+      "team": "Team",
+      "system": "System"
+    },
+    "money": {
+      "hint": "Price in Rupiah (whole numbers)"
+    },
+    "productType": "Product type",
+    "kitchenStation": "Kitchen station",
+    "variants": {
+      "label": "variants",
+      "title": "Product variants",
+      "add": "Add variant",
+      "created": "Variant created"
+    },
     "tabs": {
       "products": "Products",
       "categories": "Categories",
@@ -370,6 +427,12 @@
       "transfer": "Stock transfer",
       "suppliers": "Suppliers",
       "purchasing": "Purchasing",
+      "promos": "Promos",
+      "tables": "Tables",
+      "stockOpname": "Stock count",
+      "recipes": "Recipes / BOM",
+      "kitchen": "Kitchen stations",
+      "gl": "Journal / GL",
       "edge": "Edge sync",
       "audit": "Audit trail"
     },
@@ -424,6 +487,7 @@
     "staffPinSet": "Set PIN",
     "staffPinInvalid": "PIN must be 4–8 digits",
     "staffCreated": "Staff created",
+    "staffStations": "KDS stations",
     "inventory": {
       "hint": "Count on-hand stock per outlet and set store-specific prices. Clear the override to use the catalog price again.",
       "store": "Store",
@@ -442,6 +506,18 @@
     },
     "emptyStores": "No stores yet.",
     "emptyAudit": "No audit logs yet.",
+    "stores": {
+      "hint": "Store profile, address, timezone, receipt header/footer, and QRIS.",
+      "address": "Address",
+      "phone": "Phone",
+      "timezone": "Timezone",
+      "receiptHeader": "Receipt header",
+      "receiptFooter": "Receipt footer",
+      "save": "Save store",
+      "saved": "Store settings saved",
+      "add": "Add store",
+      "created": "Store created"
+    },
     "qrisHint": "Paste the static QRIS string (EMVCo MPM) from your bank/PSP. At checkout, BonPOS converts it to a dynamic QR with the sale amount embedded (Odoo-style).",
     "qrisPayload": "QRIS payload (static)",
     "qrisPlaceholder": "00020101021126…",
@@ -455,8 +531,15 @@
       "product": "Product",
       "qty": "Qty",
       "note": "Note",
-      "submit": "Transfer now",
+      "addLine": "Add line",
+      "submit": "Ship (in-transit)",
       "ok": "Stock transferred",
+      "ship": "Ship",
+      "shipped": "Transfer shipped (in-transit)",
+      "received": "Transfer received at destination",
+      "cancelled": "Transfer cancelled",
+      "receive": "Receive",
+      "cancel": "Cancel",
       "empty": "No transfers yet."
     },
     "suppliers": {
@@ -465,6 +548,7 @@
       "name": "Name",
       "phone": "Phone",
       "email": "Email",
+      "address": "Address",
       "add": "Add supplier",
       "created": "Supplier created",
       "saved": "Supplier saved",
@@ -473,7 +557,7 @@
       "activate": "Activate"
     },
     "purchasing": {
-      "hint": "Create a PO to a supplier, confirm it, then receive goods (partial OK) into store stock. Costs are integer sen.",
+      "hint": "Create a PO to a supplier, confirm it, then receive goods (partial OK) into store stock. Costs are whole Rupiah integers.",
       "supplier": "Supplier",
       "store": "Receive store",
       "product": "Product",
@@ -504,6 +588,75 @@
       "receipts": "Receipts",
       "invalidLine": "Qty and unit cost must be integers (qty ≥ 1, cost ≥ 0)"
     },
+    "tables": {
+      "hint": "Configure dining areas and tables for F&B. Table status is derived from open POS orders.",
+      "areaName": "Area name",
+      "addArea": "Add area",
+      "addTable": "Add table",
+      "noArea": "No area",
+      "capacity": "Capacity",
+      "areaCreated": "Table area added",
+      "tableCreated": "Table added",
+      "empty": "No tables yet."
+    },
+    "stockOpname": {
+      "hint": "Physical count session per store. On complete, variances adjust on-hand stock.",
+      "start": "Start count",
+      "created": "Session {code} created",
+      "open": "Open",
+      "backToList": "Session list",
+      "system": "System",
+      "counted": "Counted",
+      "variance": "Variance",
+      "complete": "Complete & apply",
+      "cancel": "Cancel session",
+      "completed": "Stock count completed — inventory updated",
+      "cancelled": "Stock count session cancelled",
+      "empty": "No stock count sessions yet.",
+      "qtyInvalid": "Counted qty must be an integer ≥ 0"
+    },
+    "recipes": {
+      "hint": "Menu recipe/BOM → raw ingredients. On checkout, ingredient stock is deducted (not the finished menu SKU). COGS = unit cost × qty.",
+      "menuProduct": "Menu product",
+      "ingredient": "Ingredient",
+      "ingredients": "ingredients",
+      "qty": "Ingredient qty",
+      "unitCost": "Unit cost (Rp)",
+      "addLine": "Add ingredient",
+      "saved": "Recipe saved",
+      "hppPreview": "COGS per serving"
+    },
+    "kitchen": {
+      "hint": "Kitchen stations for KDS routing. Assign a station to menu products — items appear on the kitchen screen when added to cart.",
+      "addStation": "Add station",
+      "stationCreated": "Kitchen station added",
+      "assign": "Assign station",
+      "assigned": "Product station updated",
+      "noStation": "No station"
+    },
+    "promos": {
+      "hint": "Voucher discounts as % (bps) or fixed amount. Cashiers enter the code on POS. 1000 bps = 10%.",
+      "code": "Code",
+      "name": "Name",
+      "percent": "Percent",
+      "fixed": "Fixed",
+      "percentBps": "Bps (1000=10%)",
+      "amount": "Amount (Rp)",
+      "usageLimit": "Usage limit",
+      "minSubtotal": "Min subtotal (Rp)",
+      "maxDiscount": "Max discount (Rp)",
+      "add": "Add promo",
+      "created": "Promo created",
+      "saved": "Promo saved",
+      "empty": "No promos yet.",
+      "deactivate": "Deactivate",
+      "activate": "Activate"
+    },
+    "gl": {
+      "hint": "Chart of accounts + posted journal (auto on sale). Ready for Accurate / Jurnal.id mapping.",
+      "emptyAccounts": "No accounts yet — open Admin after seed.",
+      "emptyEntries": "No journal entries yet."
+    },
     "edge": {
       "enabled": "Enabled",
       "pending": "Pending outbox",
@@ -512,6 +665,20 @@
       "push": "Push outbox now",
       "pushOk": "Edge push finished",
       "unavailable": "Edge sync status unavailable"
+    }
+  },
+  "kitchen": {
+    "title": "Kitchen Display",
+    "subtitle": "Active tickets — tap to bump status (Moka-style).",
+    "empty": "No kitchen tickets yet.",
+    "loadFailed": "Failed to load kitchen tickets",
+    "bumpFailed": "Failed to update status",
+    "noStore": "Select a store / log in again",
+    "autoRefresh": "Auto-refresh every 8s",
+    "status": {
+      "PREPARING": "Prep",
+      "READY": "Ready",
+      "DONE": "Done"
     }
   },
   "status": {

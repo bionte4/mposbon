@@ -86,12 +86,18 @@ export class AuthResolutionMiddleware implements NestMiddleware {
       throw new ForbiddenException('User does not belong to resolved tenant');
     }
 
+    const stationRows = await this.prismaAdmin.userKitchenStation.findMany({
+      where: { tenantId: tenant.id, userId: user.id },
+      select: { stationId: true },
+    });
+
     const authUser = toAuthUser({
       id: user.id,
       tenantId: user.tenantId,
       email: user.email,
       displayName: user.displayName,
       role: user.role as StaffRole,
+      kitchenStationIds: stationRows.map((r) => r.stationId),
     });
     req.user = authUser;
     AuthContext.run(authUser, () => next());
@@ -115,6 +121,12 @@ export class AuthResolutionMiddleware implements NestMiddleware {
     }
     // Nest global prefix may be /api/v1
     if (normalized.endsWith('/auth/login') || normalized === '/auth/login') {
+      return true;
+    }
+    if (
+      normalized.endsWith('/payments/webhooks/midtrans') ||
+      normalized.endsWith('/payments/webhooks/xendit')
+    ) {
       return true;
     }
     return false;

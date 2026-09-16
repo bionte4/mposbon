@@ -143,6 +143,7 @@ export class AdminController {
       role: StaffRole;
       pin: string;
       isActive?: boolean;
+      kitchenStationIds?: string[];
     },
   ) {
     return this.admin.createStaff(body);
@@ -159,6 +160,7 @@ export class AdminController {
       role?: StaffRole;
       pin?: string | null;
       isActive?: boolean;
+      kitchenStationIds?: string[];
     },
   ) {
     return this.admin.updateStaff(id, body);
@@ -170,23 +172,52 @@ export class AdminController {
     return this.admin.listStores();
   }
 
+  @Post('stores')
+  @RequirePermissions('admin.outlet.write')
+  createStore(
+    @Body()
+    body: {
+      code: string;
+      name: string;
+      address?: string | null;
+      phone?: string | null;
+      timezone?: string;
+      receiptHeader?: string | null;
+      receiptFooter?: string | null;
+      qrisPayload?: string | null;
+      isActive?: boolean;
+    },
+  ) {
+    return this.admin.createStore(body);
+  }
+
   @Patch('stores/:id')
-  @RequirePermissions('admin.catalog.write')
+  @RequirePermissions('admin.outlet.write')
   updateStore(
     @Param('id') id: string,
-    @Body() body: { qrisPayload?: string | null },
+    @Body()
+    body: {
+      name?: string;
+      address?: string | null;
+      phone?: string | null;
+      timezone?: string;
+      receiptHeader?: string | null;
+      receiptFooter?: string | null;
+      isActive?: boolean;
+      qrisPayload?: string | null;
+    },
   ) {
     return this.admin.updateStore(id, body);
   }
 
   @Get('stores/:storeId/inventory')
-  @RequirePermissions('admin.access')
+  @RequirePermissions('admin.inventory.read')
   listStoreInventory(@Param('storeId') storeId: string) {
     return this.admin.listStoreInventory(storeId);
   }
 
   @Patch('stores/:storeId/inventory/:productId')
-  @RequirePermissions('admin.catalog.write')
+  @RequirePermissions('admin.inventory.write')
   patchStoreInventory(
     @Param('storeId') storeId: string,
     @Param('productId') productId: string,
@@ -202,22 +233,81 @@ export class AdminController {
   }
 
   @Get('stock-transfers')
-  @RequirePermissions('admin.access')
+  @RequirePermissions('admin.inventory.read')
   listTransfers() {
     return this.admin.listTransfers();
   }
 
   @Post('stock-transfers')
-  @RequirePermissions('admin.catalog.write')
+  @RequirePermissions('admin.inventory.write')
   createTransfer(
     @Body()
     body: {
       fromStoreId: string;
       toStoreId: string;
       note?: string;
+      mode?: 'draft' | 'in_transit' | 'immediate';
       lines: Array<{ productId: string; qty: number }>;
     },
   ) {
     return this.admin.createTransfer(body);
+  }
+
+  @Post('stock-transfers/:id/ship')
+  @RequirePermissions('admin.inventory.write')
+  shipTransfer(@Param('id') id: string) {
+    return this.admin.shipTransfer(id);
+  }
+
+  @Post('stock-transfers/:id/receive')
+  @RequirePermissions('admin.inventory.write')
+  receiveTransfer(@Param('id') id: string) {
+    return this.admin.receiveTransfer(id);
+  }
+
+  @Post('stock-transfers/:id/cancel')
+  @RequirePermissions('admin.inventory.write')
+  cancelTransfer(@Param('id') id: string) {
+    return this.admin.cancelTransfer(id);
+  }
+
+  @Get('products/:productId/variants')
+  @RequirePermissions('admin.access')
+  listVariants(@Param('productId') productId: string) {
+    return this.admin.listVariants(productId);
+  }
+
+  @Post('products/:productId/variants')
+  @RequirePermissions('admin.catalog.write')
+  createVariant(
+    @Param('productId') productId: string,
+    @Body()
+    body: {
+      sku: string;
+      name: string;
+      barcode?: string | null;
+      unitPriceInCents: number;
+      sortOrder?: number;
+      isActive?: boolean;
+      initialQtyByStore?: Array<{ storeId: string; qty: number }>;
+    },
+  ) {
+    return this.admin.createVariant({ ...body, productId });
+  }
+
+  @Patch('variants/:id')
+  @RequirePermissions('admin.catalog.write')
+  updateVariant(
+    @Param('id') id: string,
+    @Body()
+    body: Partial<{
+      name: string;
+      barcode: string | null;
+      unitPriceInCents: number;
+      sortOrder: number;
+      isActive: boolean;
+    }>,
+  ) {
+    return this.admin.updateVariant(id, body);
   }
 }

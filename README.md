@@ -13,6 +13,9 @@ Decoupled **Vue 3 SPA** + **NestJS API** + **PostgreSQL** (Row-Level Security). 
 | **Shift** | Clock-in/out, cash drop / mid-count, X-Report & Z-Report archive |
 | **Inventory** | Per-store stock & price override, inter-store transfer |
 | **Purchasing** | Suppliers, purchase orders, partial goods receipt → store stock |
+| **Promos** | Voucher % (bps) or fixed amount; scope ALL/category/product |
+| **Payments** | Local dynamic QRIS, Midtrans/Xendit QRIS charge + webhook/poll |
+| **Loyalty** | Earn points on sale + redeem points for discount |
 | **Admin** | Catalog, categories, modifiers, staff/PIN, QRIS payload per store, audit trail |
 | **HRIS** | Employees, attendance, work shifts, payroll draft (OT + PPh 21 helpers) |
 | **Dashboard** | Gross/net sales, AOV, top products, shift discrepancy widgets |

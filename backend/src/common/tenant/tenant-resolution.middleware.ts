@@ -47,7 +47,16 @@ export class TenantResolutionMiddleware implements NestMiddleware {
 
   private isPublicPath(path: string): boolean {
     const normalized = path.split('?')[0].replace(/\/$/, '') || '/';
-    return normalized === '/health' || normalized.endsWith('/health');
+    if (normalized === '/health' || normalized.endsWith('/health')) {
+      return true;
+    }
+    if (
+      normalized.endsWith('/payments/webhooks/midtrans') ||
+      normalized.endsWith('/payments/webhooks/xendit')
+    ) {
+      return true;
+    }
+    return false;
   }
 
   /**

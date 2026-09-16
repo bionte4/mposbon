@@ -36,8 +36,11 @@ export type AdminProduct = {
   taxBps: number;
   stockQty: number;
   isActive: boolean;
+  productType?: 'RETAIL' | 'MENU' | 'INGREDIENT';
+  kitchenStationId?: string | null;
   category?: { id: string; name: string };
   modifierGroups?: AdminModifierGroup[];
+  variants?: ProductVariant[];
 };
 
 export type AdminStaff = {
@@ -47,6 +50,7 @@ export type AdminStaff = {
   role: string;
   isActive: boolean;
   hasPin?: boolean;
+  kitchenStationIds?: string[];
   createdAt: string;
   updatedAt?: string;
 };
@@ -55,6 +59,12 @@ export type AdminStore = {
   id: string;
   code: string;
   name: string;
+  address?: string | null;
+  phone?: string | null;
+  timezone?: string | null;
+  receiptHeader?: string | null;
+  receiptFooter?: string | null;
+  isActive?: boolean;
   qrisPayload: string | null;
   updatedAt?: string;
 };
@@ -107,6 +117,8 @@ export function createAdminProduct(body: {
   taxBps?: number;
   stockQty?: number;
   isActive?: boolean;
+  productType?: 'RETAIL' | 'MENU' | 'INGREDIENT';
+  kitchenStationId?: string | null;
 }) {
   return apiPost<AdminProduct>('/admin/products', body);
 }
@@ -122,6 +134,8 @@ export function updateAdminProduct(
     taxBps: number;
     stockQty: number;
     isActive: boolean;
+    productType: 'RETAIL' | 'MENU' | 'INGREDIENT';
+    kitchenStationId: string | null;
   }>,
 ) {
   return apiPatch<AdminProduct>(`/admin/products/${id}`, body);
@@ -193,6 +207,7 @@ export function createAdminStaff(body: {
   role: string;
   pin: string;
   isActive?: boolean;
+  kitchenStationIds?: string[];
 }) {
   return apiPost<AdminStaff>('/admin/staff', body);
 }
@@ -205,6 +220,7 @@ export function updateAdminStaff(
     role?: string;
     pin?: string | null;
     isActive?: boolean;
+    kitchenStationIds?: string[];
   },
 ) {
   return apiPatch<AdminStaff>(`/admin/staff/${id}`, body);
@@ -214,9 +230,32 @@ export function fetchAdminStores() {
   return apiGet<AdminStore[]>('/admin/stores');
 }
 
+export function createAdminStore(body: {
+  code: string;
+  name: string;
+  address?: string | null;
+  phone?: string | null;
+  timezone?: string | null;
+  receiptHeader?: string | null;
+  receiptFooter?: string | null;
+  qrisPayload?: string | null;
+  isActive?: boolean;
+}) {
+  return apiPost<AdminStore>('/admin/stores', body);
+}
+
 export function updateAdminStore(
   id: string,
-  body: { qrisPayload?: string | null },
+  body: Partial<{
+    name: string;
+    address: string | null;
+    phone: string | null;
+    timezone: string | null;
+    receiptHeader: string | null;
+    receiptFooter: string | null;
+    qrisPayload: string | null;
+    isActive: boolean;
+  }>,
 ) {
   return apiPatch<AdminStore>(`/admin/stores/${id}`, body);
 }
@@ -271,15 +310,30 @@ export function patchStoreInventory(
 
 export type StockTransfer = {
   id: string;
+  status: 'DRAFT' | 'IN_TRANSIT' | 'COMPLETED' | 'CANCELLED';
   fromStore: { id: string; code: string; name: string };
   toStore: { id: string; code: string; name: string };
   note: string | null;
+  shippedAt?: string | null;
+  receivedAt?: string | null;
   createdAt: string;
   lines: Array<{
     qty: number;
     product: { id: string; sku: string; name: string };
   }>;
   createdBy: { id: string; displayName: string };
+};
+
+export type ProductVariant = {
+  id: string;
+  productId: string;
+  sku: string;
+  name: string;
+  barcode: string | null;
+  unitPriceInCents: number;
+  sortOrder: number;
+  isActive: boolean;
+  stockQty?: number;
 };
 
 export function fetchStockTransfers() {
@@ -290,11 +344,81 @@ export function createStockTransfer(body: {
   fromStoreId: string;
   toStoreId: string;
   note?: string;
+  mode?: 'draft' | 'in_transit' | 'immediate';
   lines: Array<{ productId: string; qty: number }>;
 }) {
   return apiPost<StockTransfer>('/admin/stock-transfers', body);
 }
 
+export function shipStockTransfer(id: string) {
+  return apiPost<StockTransfer>(`/admin/stock-transfers/${id}/ship`, {});
+}
+
+export function receiveStockTransfer(id: string) {
+  return apiPost<StockTransfer>(`/admin/stock-transfers/${id}/receive`, {});
+}
+
+export function cancelStockTransfer(id: string) {
+  return apiPost<StockTransfer>(`/admin/stock-transfers/${id}/cancel`, {});
+}
+
+export function createProductVariant(
+  productId: string,
+  body: {
+    sku: string;
+    name: string;
+    barcode?: string | null;
+    unitPriceInCents: number;
+    sortOrder?: number;
+    isActive?: boolean;
+    initialQtyByStore?: Array<{ storeId: string; qty: number }>;
+  },
+) {
+  return apiPost<ProductVariant>(`/admin/products/${productId}/variants`, body);
+}
+
+export function updateProductVariant(
+  id: string,
+  body: Partial<{
+    name: string;
+    barcode: string | null;
+    unitPriceInCents: number;
+    sortOrder: number;
+    isActive: boolean;
+  }>,
+) {
+  return apiPatch<ProductVariant>(`/admin/variants/${id}`, body);
+}
+
 export function fetchAuditLogs(limit = 50) {
   return apiGet<AuditLogRow[]>(`/audit/logs?limit=${limit}`);
+}
+
+export type GlAccount = {
+  id: string;
+  code: string;
+  name: string;
+  type: string;
+};
+
+export type JournalEntry = {
+  id: string;
+  sourceType: string;
+  sourceId: string;
+  memo: string | null;
+  postedAt: string;
+  lines: Array<{
+    accountCode: string;
+    debitInCents: number;
+    creditInCents: number;
+    memo: string | null;
+  }>;
+};
+
+export function fetchGlAccounts() {
+  return apiGet<GlAccount[]>('/gl/accounts');
+}
+
+export function fetchJournalEntries(limit = 50) {
+  return apiGet<JournalEntry[]>(`/gl/entries?limit=${limit}`);
 }

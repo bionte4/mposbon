@@ -184,7 +184,7 @@ onUnmounted(() => {
         height="224"
       />
       <p class="text-center text-sm text-slate-600">{{ t('pos.checkout.qrisScanHint') }}</p>
-      <p v-if="isPaid" class="text-sm font-semibold text-emerald-700">
+      <p v-if="isPaid" class="rounded-xl bg-emerald-100 px-3 py-2 text-sm font-semibold text-emerald-900">
         {{ t('pos.checkout.qrisPaid') }}
       </p>
       <button
@@ -205,6 +205,9 @@ onUnmounted(() => {
       >
         {{ t('pos.checkout.qrisCheckStatus') }}
       </button>
+      <p v-else-if="!isPaid" class="text-xs text-amber-800">
+        {{ t('pos.checkout.qrisWaiting') }}
+      </p>
     </div>
   </div>
 </template>

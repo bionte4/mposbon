@@ -91,8 +91,11 @@ Keluar: tombol **Logout**.
 2. Pilih metode:
    - **Tunai** — masukkan uang diterima; sistem hitung kembalian
    - **QRIS** — tampil **QR pembayaran** (dari payload toko di Admin → Outlet, atau Midtrans/Xendit). Ini beda dengan QR di preview struk.
-   - **Split** — kombinasi tunai + non-tunai
-   - **Kartu** — sebagai jenis tender (belum terhubung EDC gateway)
+     - Lokal: ketuk **Konfirmasi sudah bayar** setelah pelanggan transfer
+     - PSP: ketuk **Cek status bayar** sampai status lunas
+     - Tombol selesaikan terkunci sampai QRIS lunas
+   - **Kartu** — proses di mesin EDC dulu, lalu ketuk **EDC berhasil — konfirmasi** (belum terhubung gateway EDC). Tombol selesaikan terkunci sampai dikonfirmasi
+   - **Split** — kombinasi tunai + kartu/QRIS (aturan konfirmasi sama)
 3. Opsional: tip.
 4. Konfirmasi → layar **preview nota** (shell printer).
 
@@ -103,7 +106,7 @@ Setelah bayar sukses:
 1. Tampil preview bergaya printer thermal (bisa **tarik ke bawah** untuk animasi sobek).
 2. **QR di kaki struk** = referensi transaksi (`BONPOS:` + ID sale), **bukan** QRIS bayar. Tidak ada setting Admin untuk QR ini.
 3. Aksi:
-   - **Cetak struk** → kirim ESC/POS ke printer (Web Serial / USB)
+   - **Cetak struk** → kirim ESC/POS (USB/Serial atau LAN — lihat §10)
    - **Simpan PNG** → unduh gambar struk
    - **Salin teks** / **Lewati cetak**
 
@@ -238,12 +241,16 @@ Kasir **tidak** punya akses menu ini.
 
 | Perangkat | Cara kerja |
 |-----------|------------|
-| Printer thermal | ESC/POS via Web Serial → WebUSB → fallback hex preview |
-| Preview struk | Setelah bayar: shell printer + tarik-sobek struk, QR referensi, simpan PNG, lalu **Cetak struk** ke perangkat |
+| Printer thermal | ESC/POS: **Web Serial → WebUSB → LAN (TCP 9100 via API)** → fallback hex preview |
+| Setup di POS | Badge status di header POS → buka **Setup printer** |
+| USB / Serial | Chrome/Edge: **Pasang & uji cetak**. Browser minta izin perangkat. |
+| LAN / Wi‑Fi | Isi IP printer + port (biasanya **9100**). Server API harus satu jaringan dengan printer. Tes koneksi / cetak uji. Hanya alamat LAN privat. |
+| Bluetooth | Tidak didukung di browser murni (tidak ada SPP klasik). Pakai USB, dongle USB, atau printer LAN. |
+| Preview struk | Setelah bayar: shell printer + tarik-sobek struk, QR referensi, simpan PNG, lalu **Cetak struk** |
 | Laci kas | Perintah `ESC p` (buka paksa butuh PIN) |
 | Scanner barcode | Mode keyboard wedge (HID) |
 
-Pastikan browser mengizinkan akses serial/USB. Printer Bluetooth native (seperti app Moka) belum didukung di browser murni.
+Pastikan browser mengizinkan akses serial/USB bila memakai kabel. Untuk LAN, pastikan firewall mengizinkan port 9100 dari mesin API ke printer.
 
 ---
 

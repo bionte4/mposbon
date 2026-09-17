@@ -157,6 +157,12 @@
       "change": "Change",
       "short": "Tendered amount is less than total",
       "confirm": "Complete sale",
+      "confirmPaid": "Complete — paid",
+      "confirmWaitQris": "Waiting for QRIS…",
+      "confirmWaitCard": "Confirm EDC first…",
+      "cardConfirmAction": "EDC approved — tap to confirm",
+      "cardConfirmed": "EDC confirmed ✓ (tap to undo)",
+      "cardReady": "Ready to complete card sale",
       "singlePay": "Single",
       "splitPay": "Split",
       "splitHint": "Pay part in cash, remainder on card/QRIS",
@@ -171,7 +177,7 @@
         "SPLIT": "Split"
       },
       "hint": {
-        "CARD": "Confirm card payment on the terminal, then complete.",
+        "CARD": "Run the card on the EDC first. After approval, confirm below, then complete.",
         "QRIS": "Show QRIS to the customer, then complete when paid."
       },
       "qrisAmount": "QRIS amount",
@@ -182,9 +188,41 @@
       "qrisBill": "Ref: {bill}",
       "qrisMissing": "Store QRIS is not configured. Set the static payload in Admin → Stores.",
       "qrisRenderError": "Failed to render QRIS QR",
-      "qrisPaid": "QRIS payment confirmed",
+      "qrisPaid": "QRIS payment confirmed — ready to complete",
       "qrisConfirmLocal": "Confirm customer paid",
-      "qrisCheckStatus": "Check payment status"
+      "qrisCheckStatus": "Check payment status",
+      "qrisWaiting": "Not paid yet — confirm locally or check PSP status first"
+    },
+    "printer": {
+      "setupTitle": "Printer setup",
+      "setupSubtitle": "USB/Serial in the browser, or LAN via the API server",
+      "status": {
+        "none": "Printer: none",
+        "ready": "Printer: ready",
+        "serial": "Printer: Serial",
+        "usb": "Printer: USB",
+        "network": "Printer: LAN"
+      },
+      "detail": "Mode {method} · Serial {serial} · USB {usb} · LAN {lan}",
+      "usbTitle": "USB / Serial",
+      "usbHint": "Chrome/Edge: pair a USB ESC/POS printer. The browser will ask for device permission.",
+      "pairUsb": "Pair & test USB/Serial",
+      "lanTitle": "LAN / Wi‑Fi (TCP 9100)",
+      "lanHint": "Printer and API server must be on the same network. Enter the printer IP (not the tablet IP).",
+      "lanHost": "Printer IP / hostname",
+      "lanPort": "Port (usually 9100)",
+      "lanEnable": "Enable LAN printing",
+      "lanSave": "Save",
+      "lanPing": "Test connection",
+      "lanTest": "LAN test print",
+      "lanClear": "Clear LAN",
+      "lanSaved": "LAN settings saved",
+      "lanPingOk": "LAN printer reachable",
+      "lanPingFail": "Cannot reach LAN printer",
+      "lanPrintFail": "LAN print failed",
+      "lanCleared": "LAN config cleared",
+      "btTitle": "Bluetooth",
+      "btHint": "Browsers do not support classic Bluetooth SPP like native POS apps. Use USB cable, USB dongle, or a LAN/Wi‑Fi printer."
     },
     "promo": {
       "codePlaceholder": "Promo code",

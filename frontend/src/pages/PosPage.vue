@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia';
 import CheckoutPanel from '../components/CheckoutPanel.vue';
 import CashDrawerModal from '../components/CashDrawerModal.vue';
 import ModifierPickerModal from '../components/ModifierPickerModal.vue';
+import PrinterSetupModal from '../components/PrinterSetupModal.vue';
 import ReceiptPreviewPanel from '../components/ReceiptPreviewPanel.vue';
 import SupervisorPinModal from '../components/SupervisorPinModal.vue';
 import SwipeRevealRow from '../components/SwipeRevealRow.vue';
@@ -18,7 +19,6 @@ import {
   buildZReportReceipt,
   bytesToHex,
   escPosOpenDrawer,
-  pairThermalPrinter,
   sendToThermalPrinter,
 } from '../lib/escpos';
 import type { CachedProduct, ModifierSnapshot, PaymentMethod, PosCustomer } from '../db/pos-types';
@@ -35,6 +35,7 @@ import { previewPromo } from '../services/promo-api.service';
 import { useAuthStore } from '../stores/auth.store';
 import { useCatalogStore } from '../stores/catalog.store';
 import { useCartStore } from '../stores/cart.store';
+import { usePrinterStore } from '../stores/printer.store';
 import { useShiftStore } from '../stores/shift.store';
 import { useSyncStore } from '../stores/sync.store';
 import { useToastStore } from '../stores/toast.store';
@@ -49,10 +50,12 @@ const sync = useSyncStore();
 const shift = useShiftStore();
 const auth = useAuthStore();
 const toast = useToastStore();
+const printer = usePrinterStore();
 
 const { categories, products, loadError, session } = storeToRefs(catalog);
 const { cart, heldCarts } = storeToRefs(cartStore);
 const { label: syncLabel, online, lastReceiptHex, pendingReceipt } = storeToRefs(sync);
+const { isConnected: printerConnected, statusLabelKey: printerStatusKey } = storeToRefs(printer);
 const receiptPrinting = ref(false);
 const { active: activeShift, isOpen: shiftOpen, lastZReport } = storeToRefs(shift);
 
@@ -451,9 +454,11 @@ async function onReceiptPrint(): Promise<void> {
     if (!result) return;
     if (result.ok) {
       toast.success(t('pos.receipt.printOk'), result.method);
+      printer.markPrintResult(result.method, true);
     } else {
       toast.warning(t('pos.toast.printerPreview'), t('pos.toast.printerPreviewBody'));
       lastReceiptHex.value = result.hex;
+      printer.markPrintResult(result.method, false);
     }
     sync.dismissPendingReceipt();
   } catch (error) {
@@ -534,7 +539,8 @@ async function doClockOut(): Promise<void> {
       countedCashInCents: report.drawer.countedCashInCents ?? countedCash.value,
       discrepancyInCents: report.drawer.discrepancyInCents ?? 0,
     });
-    await sendToThermalPrinter(bytes);
+    const zPrinted = await sendToThermalPrinter(bytes);
+    printer.markPrintResult(zPrinted.method, zPrinted.ok);
   } catch (error) {
     pageError.value = error instanceof Error ? error.message : t('pos.errors.clockOut');
   } finally {
@@ -542,21 +548,8 @@ async function doClockOut(): Promise<void> {
   }
 }
 
-async function connectPrinter(): Promise<void> {
-  busy.value = true;
-  try {
-    const result = await pairThermalPrinter();
-    if (result.ok) {
-      toast.success(t('pos.toast.printerOk'), result.method);
-    } else {
-      toast.warning(t('pos.toast.printerPreview'), t('pos.toast.printerPreviewBody'));
-    }
-    lastReceiptHex.value = result.hex;
-  } catch (error) {
-    pageError.value = error instanceof Error ? error.message : t('pos.errors.printer');
-  } finally {
-    busy.value = false;
-  }
+function openPrinterSetup(): void {
+  printer.openSetup();
 }
 
 function requestDrawer(): void {
@@ -711,6 +704,7 @@ async function onPinConfirm(pin: string): Promise<void> {
       @confirm="onPinConfirm"
       @cancel="pinAction = null; pendingRemove = null"
     />
+    <PrinterSetupModal />
 
     <section class="min-h-0 flex-[1.05] overflow-y-auto p-3 sm:p-4 lg:flex-1 lg:pb-4">
       <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -724,11 +718,16 @@ async function onPinConfirm(pin: string): Promise<void> {
         <div class="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            class="rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 ring-1 ring-slate-200"
+            class="rounded-full px-3 py-1.5 text-sm font-semibold ring-1"
+            :class="
+              printerConnected
+                ? 'bg-emerald-50 text-emerald-900 ring-emerald-200'
+                : 'bg-amber-50 text-amber-950 ring-amber-200'
+            "
             :disabled="busy"
-            @click="connectPrinter"
+            @click="openPrinterSetup"
           >
-            {{ t('pos.connectPrinter') }}
+            {{ t(printerStatusKey) }}
           </button>
           <p
             class="rounded-full px-3 py-1.5 text-sm font-semibold"

@@ -11,6 +11,7 @@ import { KitchenModule } from '../kitchen/kitchen.module';
 import { ShiftModule } from '../shifts/shift.module';
 import { PosController } from './pos.controller';
 import { PosService } from './pos.service';
+import { PrinterService } from './printer.service';
 import { SensitivePosService } from './sensitive-pos.service';
 
 @Module({
@@ -27,6 +28,6 @@ import { SensitivePosService } from './sensitive-pos.service';
     GlModule,
   ],
   controllers: [PosController],
-  providers: [PosService, SensitivePosService],
+  providers: [PosService, SensitivePosService, PrinterService],
 })
 export class PosModule {}

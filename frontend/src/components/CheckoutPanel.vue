@@ -46,6 +46,8 @@ const tipRupiah = ref(0);
 const splitCashRupiah = ref(0);
 const splitSecond = ref<'CARD' | 'QRIS'>('CARD');
 const qrisChargeId = ref<string | null>(null);
+/** Cashier must confirm EDC success before completing CARD tender. */
+const cardConfirmed = ref(false);
 
 watch(
   () => props.totalInCents,
@@ -53,12 +55,24 @@ watch(
     tenderedRupiah.value = total + Math.max(0, Math.trunc(tipRupiah.value));
     splitCashRupiah.value = Math.max(1, Math.floor(total / 2));
     qrisChargeId.value = null;
+    cardConfirmed.value = false;
   },
   { immediate: true },
 );
 
 watch(method, () => {
   qrisChargeId.value = null;
+  cardConfirmed.value = false;
+});
+
+watch(splitSecond, () => {
+  qrisChargeId.value = null;
+  cardConfirmed.value = false;
+});
+
+watch(mode, () => {
+  qrisChargeId.value = null;
+  cardConfirmed.value = false;
 });
 
 const tipInCents = computed(() => Math.max(0, Math.trunc(tipRupiah.value)));
@@ -82,6 +96,43 @@ const splitInvalid = computed(
       splitCashInCents.value >= payableInCents.value),
 );
 
+const needsCardConfirm = computed(
+  () =>
+    (mode.value === 'single' && method.value === 'CARD') ||
+    (mode.value === 'split' && splitSecond.value === 'CARD'),
+);
+
+const confirmBlocked = computed(() => {
+  if (mode.value === 'single') {
+    return (
+      cashShort.value ||
+      (method.value === 'QRIS' && !qrisChargeId.value) ||
+      (method.value === 'CARD' && !cardConfirmed.value)
+    );
+  }
+  return (
+    splitInvalid.value ||
+    (splitSecond.value === 'QRIS' && !qrisChargeId.value) ||
+    (splitSecond.value === 'CARD' && !cardConfirmed.value)
+  );
+});
+
+const confirmLabel = computed(() => {
+  if (mode.value === 'single' && method.value === 'QRIS' && !qrisChargeId.value) {
+    return t('pos.checkout.confirmWaitQris');
+  }
+  if (needsCardConfirm.value && !cardConfirmed.value) {
+    return t('pos.checkout.confirmWaitCard');
+  }
+  if (mode.value === 'single' && method.value === 'QRIS' && qrisChargeId.value) {
+    return t('pos.checkout.confirmPaid');
+  }
+  if (needsCardConfirm.value && cardConfirmed.value) {
+    return t('pos.checkout.confirmPaid');
+  }
+  return t('pos.checkout.confirm');
+});
+
 const quickAmounts = computed(() => {
   const total = payableInCents.value;
   const rounds = [total];
@@ -95,6 +146,7 @@ const quickAmounts = computed(() => {
 });
 
 function confirm(): void {
+  if (confirmBlocked.value) return;
   if (mode.value === 'split') {
     if (splitInvalid.value) return;
     emit('confirm', {
@@ -118,6 +170,7 @@ function confirm(): void {
   }
   if (cashShort.value) return;
   if (method.value === 'QRIS' && !qrisChargeId.value) return;
+  if (method.value === 'CARD' && !cardConfirmed.value) return;
   emit('confirm', {
     paymentMethod: method.value,
     tipInCents: tipInCents.value || undefined,
@@ -239,11 +292,30 @@ function confirm(): void {
           <p v-if="cashShort" class="text-sm text-red-700">{{ t('pos.checkout.short') }}</p>
         </div>
 
-        <p v-else-if="method === 'CARD'" class="text-sm text-slate-600">
-          {{ t(`pos.checkout.hint.CARD`) }}
-        </p>
+        <div v-else-if="method === 'CARD'" class="space-y-2">
+          <p class="text-sm text-slate-600">{{ t('pos.checkout.hint.CARD') }}</p>
+          <button
+            type="button"
+            class="touch-target w-full rounded-2xl text-base font-semibold"
+            :class="
+              cardConfirmed
+                ? 'bg-emerald-700 text-white'
+                : 'bg-amber-100 text-amber-950 ring-1 ring-amber-300'
+            "
+            @click="cardConfirmed = !cardConfirmed"
+          >
+            {{
+              cardConfirmed
+                ? t('pos.checkout.cardConfirmed')
+                : t('pos.checkout.cardConfirmAction')
+            }}
+          </button>
+          <p v-if="cardConfirmed" class="text-sm font-semibold text-emerald-700">
+            {{ t('pos.checkout.cardReady') }}
+          </p>
+        </div>
         <QrisPayPanel
-          v-else
+          v-else-if="method === 'QRIS'"
           :payload="qrisPayload"
           :amount-in-cents="payableInCents"
           :bill-number="billNumber"
@@ -299,6 +371,25 @@ function confirm(): void {
           :client-uuid="clientUuid"
           @paid="(id) => (qrisChargeId = id)"
         />
+        <div v-else-if="splitSecond === 'CARD' && !splitInvalid" class="space-y-2">
+          <p class="text-sm text-slate-600">{{ t('pos.checkout.hint.CARD') }}</p>
+          <button
+            type="button"
+            class="touch-target w-full rounded-2xl text-base font-semibold"
+            :class="
+              cardConfirmed
+                ? 'bg-emerald-700 text-white'
+                : 'bg-amber-100 text-amber-950 ring-1 ring-amber-300'
+            "
+            @click="cardConfirmed = !cardConfirmed"
+          >
+            {{
+              cardConfirmed
+                ? t('pos.checkout.cardConfirmed')
+                : t('pos.checkout.cardConfirmAction')
+            }}
+          </button>
+        </div>
         <p v-if="splitInvalid" class="text-sm text-red-700">{{ t('pos.checkout.splitInvalid') }}</p>
       </div>
     </div>
@@ -314,14 +405,10 @@ function confirm(): void {
       <button
         type="button"
         class="touch-target rounded-2xl bg-emerald-700 text-base font-semibold text-white disabled:opacity-40"
-        :disabled="
-          mode === 'single'
-            ? cashShort || (method === 'QRIS' && !qrisChargeId)
-            : splitInvalid || (splitSecond === 'QRIS' && !qrisChargeId)
-        "
+        :disabled="confirmBlocked"
         @click="confirm"
       >
-        {{ t('pos.checkout.confirm') }}
+        {{ confirmLabel }}
       </button>
     </div>
   </div>

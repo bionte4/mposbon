@@ -1,14 +1,23 @@
 /**
  * ESC/POS command builder for 58/80mm thermal printers.
- * Transport: Web Serial (preferred) → WebUSB → hex preview fallback.
+ * Transport priority: Web Serial → WebUSB → LAN (API TCP 9100) → hex preview.
  * All money formatting expects integer smallest currency units (no float).
  */
 
 import { formatMoney } from './money';
+import { printNetworkRaw } from '../services/printer-api.service';
 
 const ESC = 0x1b;
 const GS = 0x1d;
 const LF = 0x0a;
+
+const NETWORK_STORAGE_KEY = 'bonpos.printer.network';
+
+export type NetworkPrinterConfig = {
+  enabled: boolean;
+  host: string;
+  port: number;
+};
 
 export type ReceiptLineItem = {
   name: string;
@@ -35,7 +44,7 @@ export type ReceiptData = {
   width?: number;
 };
 
-export type PrintTransport = 'webserial' | 'webusb' | 'preview';
+export type PrintTransport = 'webserial' | 'webusb' | 'network' | 'preview';
 
 export type PrintResult = {
   ok: boolean;
@@ -387,15 +396,34 @@ async function writeUsb(bytes: Uint8Array, promptIfNeeded: boolean): Promise<boo
 }
 
 /**
- * Best-effort print: Web Serial → WebUSB → hex preview.
+ * Best-effort print: Web Serial → WebUSB → LAN (via API) → hex preview.
  * Pass `{ prompt: true }` (user gesture) to request a new device when none paired.
+ * Pass `{ preferNetwork: true }` to try LAN first when configured.
  */
 export async function sendToThermalPrinter(
   bytes: Uint8Array,
-  options?: { prompt?: boolean },
+  options?: { prompt?: boolean; preferNetwork?: boolean },
 ): Promise<PrintResult> {
   const hex = bytesToHex(bytes);
   const prompt = options?.prompt === true;
+  const preferNetwork = options?.preferNetwork === true;
+  const network = getNetworkPrinterConfig();
+
+  const tryNetwork = async (): Promise<PrintResult | null> => {
+    if (!network?.enabled || !network.host) return null;
+    try {
+      await writeNetwork(bytes, network);
+      return { ok: true, method: 'network', hex };
+    } catch (error) {
+      console.warn('Network print failed', error);
+      return null;
+    }
+  };
+
+  if (preferNetwork) {
+    const net = await tryNetwork();
+    if (net) return net;
+  }
 
   try {
     if (await writeSerial(bytes, prompt)) {
@@ -403,7 +431,6 @@ export async function sendToThermalPrinter(
     }
   } catch (error) {
     if (prompt) {
-      // Fall through to USB / preview.
       console.warn('Web Serial print failed', error);
     }
   }
@@ -418,11 +445,107 @@ export async function sendToThermalPrinter(
     }
   }
 
+  if (!preferNetwork) {
+    const net = await tryNetwork();
+    if (net) return net;
+  }
+
   return { ok: false, method: 'preview', hex };
+}
+
+async function writeNetwork(bytes: Uint8Array, config: NetworkPrinterConfig): Promise<void> {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 1) {
+    binary += String.fromCharCode(bytes[i]!);
+  }
+  const dataBase64 = btoa(binary);
+  await printNetworkRaw(config.host, dataBase64, config.port);
+}
+
+export function getNetworkPrinterConfig(): NetworkPrinterConfig | null {
+  try {
+    const raw = localStorage.getItem(NETWORK_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<NetworkPrinterConfig>;
+    const host = typeof parsed.host === 'string' ? parsed.host.trim() : '';
+    const port =
+      typeof parsed.port === 'number' && Number.isInteger(parsed.port) ? parsed.port : 9100;
+    if (!host) return null;
+    return {
+      enabled: parsed.enabled !== false,
+      host,
+      port: port >= 1 && port <= 65535 ? port : 9100,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function setNetworkPrinterConfig(config: NetworkPrinterConfig | null): void {
+  if (!config || !config.host.trim()) {
+    localStorage.removeItem(NETWORK_STORAGE_KEY);
+    return;
+  }
+  localStorage.setItem(
+    NETWORK_STORAGE_KEY,
+    JSON.stringify({
+      enabled: config.enabled !== false,
+      host: config.host.trim(),
+      port: config.port || 9100,
+    } satisfies NetworkPrinterConfig),
+  );
+}
+
+/** Detect already-granted Serial/USB devices without prompting. */
+export async function probeBrowserPrinterPresence(): Promise<{
+  serial: boolean;
+  usb: boolean;
+}> {
+  let serial = false;
+  let usb = false;
+  try {
+    const nav = navigator as Navigator & { serial?: SerialNav };
+    if (nav.serial?.getPorts) {
+      const ports = await nav.serial.getPorts();
+      serial = ports.length > 0;
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    const usbNav = (navigator as Navigator & { usb?: UsbNav }).usb;
+    if (usbNav?.getDevices) {
+      const devices = await usbNav.getDevices();
+      usb = devices.length > 0;
+    }
+  } catch {
+    /* ignore */
+  }
+  return { serial, usb };
 }
 
 /** User-gesture helper to pair a printer (Serial preferred). */
 export async function pairThermalPrinter(): Promise<PrintResult> {
   const test = concat(init(), text('BonPOS printer OK\n'), feed(2), cut());
   return sendToThermalPrinter(test, { prompt: true });
+}
+
+/** Test LAN printer via API bridge (no browser USB prompt). */
+export async function testNetworkPrinter(
+  host: string,
+  port = 9100,
+): Promise<PrintResult> {
+  const test = concat(init(), text('BonPOS LAN printer OK\n'), feed(2), cut());
+  const hex = bytesToHex(test);
+  try {
+    await writeNetwork(test, { enabled: true, host, port });
+    return { ok: true, method: 'network', hex };
+  } catch (error) {
+    return {
+      ok: false,
+      method: 'preview',
+      hex,
+      error: error instanceof Error ? error.message : 'Network print failed',
+    };
+  }
 }

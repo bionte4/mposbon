@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { RequirePermissions } from '../auth/rbac.guard';
 import { PosService } from './pos.service';
+import { PrinterService } from './printer.service';
 import { SensitivePosService } from './sensitive-pos.service';
 import { SyncSaleInput, UpsertCartInput } from './pos.types';
 
@@ -9,6 +10,7 @@ export class PosController {
   constructor(
     private readonly pos: PosService,
     private readonly sensitive: SensitivePosService,
+    private readonly printer: PrinterService,
   ) {}
 
   @Get('bootstrap')
@@ -102,5 +104,20 @@ export class PosController {
     },
   ) {
     return this.sensitive.overrideCartItemPrice(body);
+  }
+
+  /** TCP raw ESC/POS to a LAN thermal printer (port 9100 typical). */
+  @Post('printer/raw')
+  @RequirePermissions('pos.sale.create')
+  printRaw(
+    @Body() body: { host: string; port?: number; dataBase64: string },
+  ) {
+    return this.printer.printRaw(body);
+  }
+
+  @Post('printer/ping')
+  @RequirePermissions('pos.sale.create')
+  pingPrinter(@Body() body: { host: string; port?: number }) {
+    return this.printer.ping(body.host, body.port);
   }
 }

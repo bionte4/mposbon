@@ -157,6 +157,12 @@
       "change": "Kembalian",
       "short": "Uang diterima kurang dari total",
       "confirm": "Selesaikan penjualan",
+      "confirmPaid": "Selesaikan — sudah lunas",
+      "confirmWaitQris": "Menunggu QRIS lunas…",
+      "confirmWaitCard": "Konfirmasi EDC dulu…",
+      "cardConfirmAction": "EDC berhasil — ketuk untuk konfirmasi",
+      "cardConfirmed": "EDC dikonfirmasi ✓ (ketuk untuk batal)",
+      "cardReady": "Siap selesaikan penjualan kartu",
       "singlePay": "Tunggal",
       "splitPay": "Split",
       "splitHint": "Bayar sebagian tunai, sisanya kartu/QRIS",
@@ -171,7 +177,7 @@
         "SPLIT": "Split"
       },
       "hint": {
-        "CARD": "Konfirmasi pembayaran kartu di terminal, lalu selesaikan.",
+        "CARD": "Proses di mesin EDC dulu. Setelah approve, konfirmasi di bawah lalu selesaikan.",
         "QRIS": "Tunjukkan QRIS ke pelanggan, lalu selesaikan setelah lunas."
       },
       "qrisAmount": "Jumlah QRIS",
@@ -182,9 +188,41 @@
       "qrisBill": "Ref: {bill}",
       "qrisMissing": "QRIS toko belum dikonfigurasi. Isi payload statis di Admin → Toko.",
       "qrisRenderError": "Gagal merender QR QRIS",
-      "qrisPaid": "Pembayaran QRIS terkonfirmasi",
+      "qrisPaid": "Pembayaran QRIS terkonfirmasi — siap selesaikan",
       "qrisConfirmLocal": "Konfirmasi sudah bayar",
-      "qrisCheckStatus": "Cek status bayar"
+      "qrisCheckStatus": "Cek status bayar",
+      "qrisWaiting": "Belum lunas — konfirmasi lokal atau cek status PSP dulu"
+    },
+    "printer": {
+      "setupTitle": "Setup printer",
+      "setupSubtitle": "USB/Serial di browser, atau LAN lewat server API",
+      "status": {
+        "none": "Printer: belum",
+        "ready": "Printer: siap",
+        "serial": "Printer: Serial",
+        "usb": "Printer: USB",
+        "network": "Printer: LAN"
+      },
+      "detail": "Mode {method} · Serial {serial} · USB {usb} · LAN {lan}",
+      "usbTitle": "USB / Serial",
+      "usbHint": "Chrome/Edge: pasang printer USB (ESC/POS). Browser akan minta izin perangkat.",
+      "pairUsb": "Pasang & uji cetak USB/Serial",
+      "lanTitle": "LAN / Wi‑Fi (TCP 9100)",
+      "lanHint": "Printer dan server API harus satu jaringan. Isi IP printer (bukan IP tablet).",
+      "lanHost": "IP / hostname printer",
+      "lanPort": "Port (biasanya 9100)",
+      "lanEnable": "Aktifkan cetak via LAN",
+      "lanSave": "Simpan",
+      "lanPing": "Tes koneksi",
+      "lanTest": "Cetak uji LAN",
+      "lanClear": "Hapus LAN",
+      "lanSaved": "Pengaturan LAN disimpan",
+      "lanPingOk": "Printer LAN terjangkau",
+      "lanPingFail": "Gagal jangkau printer LAN",
+      "lanPrintFail": "Gagal cetak LAN",
+      "lanCleared": "Konfigurasi LAN dihapus",
+      "btTitle": "Bluetooth",
+      "btHint": "Browser tidak mendukung Bluetooth klasik (SPP) seperti app Moka. Pakai kabel USB, dongle USB, atau printer LAN/Wi‑Fi."
     },
     "promo": {
       "codePlaceholder": "Kode promo",

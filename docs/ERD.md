@@ -13,7 +13,7 @@ Database: **PostgreSQL 16**, multi-tenant shared-schema (`tenant_id` + **RLS**).
 | Soft isolation toko | `store_id` pada stok, harga, shift, KDS, meja, PO, dll. |
 | On-prem sync | `edge_sync_outbox` + `edge_sync_cursors` |
 
-**56 tabel** · diagram di bawah dikelompokkan per domain (Mermaid ER).
+**56 tabel** · diagram Mermaid per domain (syntax GitHub-compatible: kunci `PK, FK` dengan koma).
 
 ---
 
@@ -21,21 +21,21 @@ Database: **PostgreSQL 16**, multi-tenant shared-schema (`tenant_id` + **RLS**).
 
 ```mermaid
 erDiagram
-  tenants ||--o| tenant_settings : has
-  tenants ||--o{ stores : owns
-  tenants ||--o{ users : employs
+  tenants ||--o| tenant_settings : "has"
+  tenants ||--o{ stores : "owns"
+  tenants ||--o{ users : "employs"
 
   tenants {
     uuid id PK
     string slug UK
     string name
     string domain
-    enum status
-    enum deployment_mode
+    string status
+    string deployment_mode
   }
 
   tenant_settings {
-    uuid tenant_id PK_FK
+    uuid tenant_id PK, FK
     string currency_code
     string timezone
     boolean edge_sync_enabled
@@ -50,7 +50,7 @@ erDiagram
     string code
     string name
     string timezone
-    text qris_payload
+    string qris_payload
   }
 
   users {
@@ -58,7 +58,7 @@ erDiagram
     uuid tenant_id FK
     string email
     string display_name
-    enum role
+    string role
     string pin_hash
     boolean is_active
   }
@@ -70,20 +70,18 @@ erDiagram
 
 ```mermaid
 erDiagram
-  tenants ||--o{ categories : has
-  categories ||--o{ products : contains
-  products ||--o{ product_variants : has
-  products ||--o{ product_modifier_groups : has
-  product_modifier_groups ||--o{ product_modifier_options : has
-  products ||--o| recipes : bom
-  recipes ||--o{ recipe_lines : lines
-  products ||--o{ store_stocks : stocked_at
-  products ||--o{ store_prices : priced_at
-  product_variants ||--o{ store_variant_stocks : stocked_at
-  stores ||--o{ store_stocks : holds
-  stores ||--o{ store_prices : overrides
-  stores ||--o{ store_variant_stocks : holds
-  products ||--o| kitchen_stations : routes_to
+  categories ||--o{ products : "contains"
+  products ||--o{ product_variants : "has"
+  products ||--o{ product_modifier_groups : "has"
+  product_modifier_groups ||--o{ product_modifier_options : "has"
+  products ||--o| recipes : "bom"
+  recipes ||--o{ recipe_lines : "lines"
+  products ||--o{ store_stocks : "stocked"
+  products ||--o{ store_prices : "priced"
+  product_variants ||--o{ store_variant_stocks : "stocked"
+  stores ||--o{ store_stocks : "holds"
+  stores ||--o{ store_prices : "overrides"
+  stores ||--o{ store_variant_stocks : "holds"
 
   categories {
     uuid id PK
@@ -101,7 +99,7 @@ erDiagram
     int unit_price_in_cents
     int tax_bps
     int stock_qty
-    enum product_type
+    string product_type
     uuid kitchen_station_id FK
   }
 
@@ -112,23 +110,45 @@ erDiagram
     int unit_price_in_cents
   }
 
+  product_modifier_groups {
+    uuid id PK
+    uuid product_id FK
+    string name
+    int min_select
+    int max_select
+  }
+
+  product_modifier_options {
+    uuid id PK
+    uuid group_id FK
+    string name
+    int price_delta_in_cents
+  }
+
   store_stocks {
-    uuid tenant_id PK_FK
-    uuid store_id PK_FK
-    uuid product_id PK_FK
+    uuid tenant_id PK, FK
+    uuid store_id PK, FK
+    uuid product_id PK, FK
     int qty
   }
 
   store_prices {
-    uuid tenant_id PK_FK
-    uuid store_id PK_FK
-    uuid product_id PK_FK
+    uuid tenant_id PK, FK
+    uuid store_id PK, FK
+    uuid product_id PK, FK
     int unit_price_in_cents
+  }
+
+  store_variant_stocks {
+    uuid tenant_id PK, FK
+    uuid store_id PK, FK
+    uuid variant_id PK, FK
+    int qty
   }
 
   recipes {
     uuid id PK
-    uuid product_id UK_FK
+    uuid product_id UK, FK
     int yield_qty
   }
 
@@ -139,6 +159,11 @@ erDiagram
     int qty
     int unit_cost_in_cents
   }
+
+  stores {
+    uuid id PK
+    string code
+  }
 ```
 
 ---
@@ -147,20 +172,20 @@ erDiagram
 
 ```mermaid
 erDiagram
-  stores ||--o{ carts : has
-  users ||--o{ carts : cashier
-  customers ||--o{ carts : guest
-  dining_tables ||--o{ carts : seated
-  carts ||--o{ cart_items : lines
-  products ||--o{ cart_items : item
-  carts ||--o| sales : checkout
-  stores ||--o{ sales : has
-  users ||--o{ sales : cashier
-  cashier_shifts ||--o{ sales : during
-  promos ||--o{ sales : applied
-  sales ||--o{ sale_lines : lines
-  sales ||--o{ sale_payments : tenders
-  stores ||--o{ payment_charges : psp
+  stores ||--o{ carts : "has"
+  users ||--o{ carts : "cashier"
+  customers ||--o{ carts : "guest"
+  dining_tables ||--o{ carts : "seated"
+  carts ||--o{ cart_items : "lines"
+  products ||--o{ cart_items : "item"
+  carts ||--o| sales : "checkout"
+  stores ||--o{ sales : "has"
+  users ||--o{ sales : "cashier"
+  cashier_shifts ||--o{ sales : "during"
+  promos ||--o{ sales : "applied"
+  sales ||--o{ sale_lines : "lines"
+  sales ||--o{ sale_payments : "tenders"
+  stores ||--o{ payment_charges : "psp"
 
   carts {
     uuid id PK
@@ -169,7 +194,7 @@ erDiagram
     int subtotal_in_cents
     int tax_in_cents
     int total_in_cents
-    enum status
+    string status
   }
 
   cart_items {
@@ -186,12 +211,12 @@ erDiagram
     uuid id PK
     uuid store_id FK
     uuid shift_id FK
-    uuid cart_id UK_FK
+    uuid cart_id UK, FK
     int subtotal_in_cents
     int discount_in_cents
     int tip_in_cents
     int total_in_cents
-    enum status
+    string status
   }
 
   sale_lines {
@@ -207,7 +232,7 @@ erDiagram
   sale_payments {
     uuid id PK
     uuid sale_id FK
-    enum method
+    string method
     int amount_in_cents
     int amount_tendered_in_cents
   }
@@ -218,7 +243,7 @@ erDiagram
     uuid sale_id FK
     string provider
     int amount_in_cents
-    enum status
+    string status
   }
 
   customers {
@@ -226,6 +251,30 @@ erDiagram
     string name
     string phone
     int loyalty_points
+  }
+
+  stores {
+    uuid id PK
+  }
+
+  users {
+    uuid id PK
+  }
+
+  cashier_shifts {
+    uuid id PK
+  }
+
+  promos {
+    uuid id PK
+  }
+
+  dining_tables {
+    uuid id PK
+  }
+
+  products {
+    uuid id PK
   }
 ```
 
@@ -235,19 +284,18 @@ erDiagram
 
 ```mermaid
 erDiagram
-  stores ||--o{ cashier_shifts : opens
-  users ||--o{ cashier_shifts : cashier
-  cashier_shifts ||--o{ cash_drawer_movements : movements
-  users ||--o{ cash_drawer_movements : actor
-  users ||--o{ supervisor_actions : requester
-  users ||--o{ supervisor_actions : supervisor
-  users ||--o{ activity_logs : actor
+  stores ||--o{ cashier_shifts : "opens"
+  users ||--o{ cashier_shifts : "cashier"
+  cashier_shifts ||--o{ cash_drawer_movements : "movements"
+  users ||--o{ cash_drawer_movements : "actor"
+  users ||--o{ supervisor_actions : "requester"
+  users ||--o{ activity_logs : "actor"
 
   cashier_shifts {
     uuid id PK
     uuid store_id FK
     uuid cashier_user_id FK
-    enum status
+    string status
     int opening_float_in_cents
     int expected_cash_in_cents
     int counted_cash_in_cents
@@ -258,7 +306,7 @@ erDiagram
   cash_drawer_movements {
     uuid id PK
     uuid shift_id FK
-    enum type
+    string type
     int amount_in_cents
     int variance_in_cents
   }
@@ -267,7 +315,7 @@ erDiagram
     uuid id PK
     uuid requester_user_id FK
     uuid supervisor_user_id FK
-    enum action_type
+    string action_type
     int amount_in_cents
   }
 
@@ -277,6 +325,14 @@ erDiagram
     string action
     int amount_in_cents
   }
+
+  stores {
+    uuid id PK
+  }
+
+  users {
+    uuid id PK
+  }
 ```
 
 ---
@@ -285,13 +341,13 @@ erDiagram
 
 ```mermaid
 erDiagram
-  stores ||--o{ kitchen_stations : has
-  kitchen_stations ||--o{ user_kitchen_stations : assigned
-  users ||--o{ user_kitchen_stations : staff
-  stores ||--o{ kitchen_orders : fires
-  kitchen_orders ||--o{ kitchen_order_lines : lines
-  kitchen_stations ||--o{ kitchen_order_lines : prep
-  products ||--o{ kitchen_order_lines : item
+  stores ||--o{ kitchen_stations : "has"
+  kitchen_stations ||--o{ user_kitchen_stations : "assigned"
+  users ||--o{ user_kitchen_stations : "staff"
+  stores ||--o{ kitchen_orders : "fires"
+  kitchen_orders ||--o{ kitchen_order_lines : "lines"
+  kitchen_stations ||--o{ kitchen_order_lines : "prep"
+  products ||--o{ kitchen_order_lines : "item"
 
   kitchen_stations {
     uuid id PK
@@ -311,7 +367,7 @@ erDiagram
     uuid id PK
     uuid store_id FK
     uuid sale_id
-    enum status
+    string status
   }
 
   kitchen_order_lines {
@@ -320,7 +376,19 @@ erDiagram
     uuid station_id FK
     uuid product_id FK
     int quantity
-    enum status
+    string status
+  }
+
+  stores {
+    uuid id PK
+  }
+
+  users {
+    uuid id PK
+  }
+
+  products {
+    uuid id PK
   }
 ```
 
@@ -330,16 +398,15 @@ erDiagram
 
 ```mermaid
 erDiagram
-  suppliers ||--o{ purchase_orders : supplies
-  stores ||--o{ purchase_orders : receives_at
-  purchase_orders ||--o{ purchase_order_lines : lines
-  purchase_orders ||--o{ goods_receipts : fulfilled_by
-  goods_receipts ||--o{ goods_receipt_lines : lines
-  stores ||--o{ stock_transfers : from
-  stores ||--o{ stock_transfers : to
-  stock_transfers ||--o{ stock_transfer_lines : lines
-  stores ||--o{ stock_count_sessions : counts
-  stock_count_sessions ||--o{ stock_count_lines : lines
+  suppliers ||--o{ purchase_orders : "supplies"
+  stores ||--o{ purchase_orders : "receives"
+  purchase_orders ||--o{ purchase_order_lines : "lines"
+  purchase_orders ||--o{ goods_receipts : "fulfilled"
+  goods_receipts ||--o{ goods_receipt_lines : "lines"
+  stores ||--o{ stock_transfers : "from_or_to"
+  stock_transfers ||--o{ stock_transfer_lines : "lines"
+  stores ||--o{ stock_count_sessions : "counts"
+  stock_count_sessions ||--o{ stock_count_lines : "lines"
 
   suppliers {
     uuid id PK
@@ -351,7 +418,7 @@ erDiagram
     uuid id PK
     uuid supplier_id FK
     uuid store_id FK
-    enum status
+    string status
     int subtotal_in_cents
   }
 
@@ -382,7 +449,7 @@ erDiagram
     uuid id PK
     uuid from_store_id FK
     uuid to_store_id FK
-    enum status
+    string status
   }
 
   stock_transfer_lines {
@@ -395,7 +462,7 @@ erDiagram
   stock_count_sessions {
     uuid id PK
     uuid store_id FK
-    enum status
+    string status
   }
 
   stock_count_lines {
@@ -406,6 +473,10 @@ erDiagram
     int counted_qty
     int variance_qty
   }
+
+  stores {
+    uuid id PK
+  }
 ```
 
 ---
@@ -414,12 +485,11 @@ erDiagram
 
 ```mermaid
 erDiagram
-  stores ||--o{ table_areas : has
-  table_areas ||--o{ dining_tables : contains
-  stores ||--o{ dining_tables : has
-  tenants ||--o{ promos : offers
-  categories ||--o{ promos : scopes
-  products ||--o{ promos : scopes
+  stores ||--o{ table_areas : "has"
+  table_areas ||--o{ dining_tables : "contains"
+  stores ||--o{ dining_tables : "has"
+  categories ||--o{ promos : "scopes"
+  products ||--o{ promos : "scopes"
 
   table_areas {
     uuid id PK
@@ -434,7 +504,7 @@ erDiagram
     uuid area_id FK
     string code
     int capacity
-    enum status
+    string status
   }
 
   promos {
@@ -443,7 +513,19 @@ erDiagram
     int percent_bps
     int amount_in_cents
     int min_subtotal_in_cents
-    enum scope
+    string scope
+  }
+
+  stores {
+    uuid id PK
+  }
+
+  categories {
+    uuid id PK
+  }
+
+  products {
+    uuid id PK
   }
 ```
 
@@ -453,16 +535,16 @@ erDiagram
 
 ```mermaid
 erDiagram
-  users ||--o| employees : profile
-  stores ||--o{ employees : assigned
-  work_shifts ||--o{ employees : default
-  employees ||--o{ attendances : clocks
-  work_shifts ||--o{ attendances : scheduled
-  employees ||--o{ payroll_slips : paid
+  users ||--o| employees : "profile"
+  stores ||--o{ employees : "assigned"
+  work_shifts ||--o{ employees : "default"
+  employees ||--o{ attendances : "clocks"
+  work_shifts ||--o{ attendances : "scheduled"
+  employees ||--o{ payroll_slips : "paid"
 
   employees {
     uuid id PK
-    uuid user_id UK_FK
+    uuid user_id UK, FK
     uuid store_id FK
     uuid work_shift_id FK
     string full_name
@@ -497,6 +579,14 @@ erDiagram
     int pph21_in_cents
     int net_in_cents
   }
+
+  users {
+    uuid id PK
+  }
+
+  stores {
+    uuid id PK
+  }
 ```
 
 ---
@@ -505,8 +595,8 @@ erDiagram
 
 ```mermaid
 erDiagram
-  stores ||--o{ daily_sales_summaries : aggregates
-  tenants ||--o{ daily_product_summaries : aggregates
+  stores ||--o{ daily_sales_summaries : "aggregates"
+  products ||--o{ daily_product_summaries : "aggregates"
 
   daily_sales_summaries {
     uuid id PK
@@ -527,6 +617,14 @@ erDiagram
     int quantity_sold
     int revenue_in_cents
   }
+
+  stores {
+    uuid id PK
+  }
+
+  products {
+    uuid id PK
+  }
 ```
 
 ---
@@ -535,21 +633,21 @@ erDiagram
 
 ```mermaid
 erDiagram
-  tenants ||--o{ gl_accounts : coa
-  tenants ||--o{ journal_entries : posts
-  journal_entries ||--o{ journal_entry_lines : lines
-  gl_accounts ||--o{ journal_entry_lines : account
-  gl_accounts ||--o{ gl_account_mappings : mapped
-  tenants ||--o{ integration_api_keys : issues
-  users ||--o{ integration_api_keys : created_by
-  tenants ||--o{ integration_webhooks : configures
-  integration_webhooks ||--o{ integration_webhook_deliveries : delivers
+  tenants ||--o{ gl_accounts : "coa"
+  tenants ||--o{ journal_entries : "posts"
+  journal_entries ||--o{ journal_entry_lines : "lines"
+  gl_accounts ||--o{ journal_entry_lines : "account"
+  gl_accounts ||--o{ gl_account_mappings : "mapped"
+  tenants ||--o{ integration_api_keys : "issues"
+  users ||--o{ integration_api_keys : "created_by"
+  tenants ||--o{ integration_webhooks : "configures"
+  integration_webhooks ||--o{ integration_webhook_deliveries : "delivers"
 
   gl_accounts {
     uuid id PK
     string code
     string name
-    enum type
+    string type
     boolean is_active
   }
 
@@ -572,7 +670,7 @@ erDiagram
   gl_account_mappings {
     uuid id PK
     uuid gl_account_id FK
-    enum provider
+    string provider
     string external_account_id
   }
 
@@ -581,14 +679,14 @@ erDiagram
     string name
     string key_prefix
     string key_hash
-    string_array scopes
+    string scopes
   }
 
   integration_webhooks {
     uuid id PK
     string url
     string secret
-    string_array events
+    string events
     boolean is_active
   }
 
@@ -599,6 +697,14 @@ erDiagram
     int status_code
     int attempts
   }
+
+  tenants {
+    uuid id PK
+  }
+
+  users {
+    uuid id PK
+  }
 ```
 
 ---
@@ -607,23 +713,31 @@ erDiagram
 
 ```mermaid
 erDiagram
-  tenants ||--o{ edge_sync_outbox : queues
-  stores ||--o{ edge_sync_outbox : scoped
-  tenants ||--o{ edge_sync_cursors : tracks
+  tenants ||--o{ edge_sync_outbox : "queues"
+  stores ||--o{ edge_sync_outbox : "scoped"
+  tenants ||--o{ edge_sync_cursors : "tracks"
 
   edge_sync_outbox {
     uuid id PK
     uuid store_id FK
     string event_type
-    json payload
-    enum status
+    string payload
+    string status
     int attempts
   }
 
   edge_sync_cursors {
-    uuid tenant_id PK_FK
+    uuid tenant_id PK, FK
     string stream PK
     string last_cursor
+  }
+
+  tenants {
+    uuid id PK
+  }
+
+  stores {
+    uuid id PK
   }
 ```
 
@@ -649,7 +763,7 @@ erDiagram
 
 ## Catatan relasi longgar
 
-Beberapa kolom UUID **tanpa** `@relation` Prisma (referensi lunak / hindari cycle):
+Kolom UUID tanpa `@relation` Prisma:
 
 - `supervisor_actions.sale_id`
 - `kitchen_orders.sale_id`
@@ -660,12 +774,10 @@ Beberapa kolom UUID **tanpa** `@relation` Prisma (referensi lunak / hindari cycl
 
 ## Regenerasi
 
-Setelah mengubah skema:
-
 ```bash
 cd backend
 npx prisma migrate dev --name <deskripsi>
 npx prisma generate
 ```
 
-Dokumentasi ini harus diselaraskan manual dengan `schema.prisma`.
+Dokumentasi ini diselaraskan manual dengan `schema.prisma`.

@@ -298,4 +298,5 @@ Pastikan browser mengizinkan akses serial/USB bila memakai kabel. Untuk LAN, pas
 | Stok 0 di cabang | Set stok di Inventori → Stok toko (seed sering isi MAIN saja) |
 | Tidak bisa masuk Admin | Role tanpa `admin.access` |
 
-Dokumentasi deploy & env: [README.md](../README.md).
+Dokumentasi deploy & env: [README.md](../README.md).  
+Diagram ERD / RDBMS (56 tabel): [ERD.md](./ERD.md).

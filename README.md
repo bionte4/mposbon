@@ -4,7 +4,8 @@ Multi-tenant Point of Sale (POS) platform for retail & F&B — cloud SaaS or on-
 
 Decoupled **Vue 3 SPA** + **NestJS API** + **PostgreSQL** (Row-Level Security). Offline-first cashier via IndexedDB/PWA, integer money (IDR), RBAC, shifts/Z-report, HRIS dasar, purchasing/receiving, kitchen/KDS, and Docker Compose for one-command deploy.
 
-**Operator guide (Bahasa Indonesia):** [docs/MANUAL.md](docs/MANUAL.md)
+**Operator guide (Bahasa Indonesia):** [docs/MANUAL.md](docs/MANUAL.md)  
+**ERD / RDBMS (PostgreSQL):** [docs/ERD.md](docs/ERD.md)
 
 ## Features
 

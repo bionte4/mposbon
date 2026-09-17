@@ -202,11 +202,11 @@ async function main(): Promise<void> {
 }
 
 async function seedVariantsAndGl(tenantId: string): Promise<void> {
-  const store = await prisma.store.findFirst({ where: { tenantId, code: 'MAIN' } });
+  const stores = await prisma.store.findMany({ where: { tenantId } });
   const tee = await prisma.product.findFirst({
     where: { tenantId, sku: 'DRINK-TEH' },
   });
-  if (store && tee) {
+  if (stores.length && tee) {
     const variants = [
       { sku: 'DRINK-TEH-R', name: 'Regular', price: 8000, qty: 40, sort: 1 },
       { sku: 'DRINK-TEH-L', name: 'Large', price: 12000, qty: 25, sort: 2 },
@@ -230,22 +230,24 @@ async function seedVariantsAndGl(tenantId: string): Promise<void> {
           sortOrder: v.sort,
         },
       });
-      await prisma.storeVariantStock.upsert({
-        where: {
-          tenantId_storeId_variantId: {
+      for (const store of stores) {
+        await prisma.storeVariantStock.upsert({
+          where: {
+            tenantId_storeId_variantId: {
+              tenantId,
+              storeId: store.id,
+              variantId: row.id,
+            },
+          },
+          update: { qty: store.code === 'MAIN' ? v.qty : Math.max(5, Math.floor(v.qty / 2)) },
+          create: {
             tenantId,
             storeId: store.id,
             variantId: row.id,
+            qty: store.code === 'MAIN' ? v.qty : Math.max(5, Math.floor(v.qty / 2)),
           },
-        },
-        update: { qty: v.qty },
-        create: {
-          tenantId,
-          storeId: store.id,
-          variantId: row.id,
-          qty: v.qty,
-        },
-      });
+        });
+      }
     }
   }
 

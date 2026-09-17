@@ -114,10 +114,28 @@ export const useCartStore = defineStore('cart', () => {
     for (const item of cart.value.items) {
       item.modifiers ??= [];
       item.guestIndex ??= 1;
+      item.variantId ??= null;
     }
+    stripInvalidVariantLines();
     Object.assign(cart.value, retotal(cart.value.items, cart.value.discountInCents));
     await persist();
     await refreshHeld();
+  }
+
+  /** Drop lines that require a variant but were saved without one (stale catalog / old carts). */
+  function stripInvalidVariantLines(): string[] {
+    const catalog = useCatalogStore();
+    if (!cart.value) return [];
+    const removed: string[] = [];
+    cart.value.items = cart.value.items.filter((item) => {
+      const product = catalog.productById(item.productId);
+      if ((product?.variants?.length ?? 0) > 0 && !item.variantId) {
+        removed.push(item.productName);
+        return false;
+      }
+      return true;
+    });
+    return removed;
   }
 
   async function persist(): Promise<void> {
@@ -132,6 +150,9 @@ export const useCartStore = defineStore('cart', () => {
     if (!cart.value) {
       return;
     }
+    stripInvalidVariantLines();
+    Object.assign(cart.value, retotal(cart.value.items, cart.value.discountInCents));
+    await persist();
     await enqueueCartUpsert({
       clientUuid: cart.value.clientUuid,
       storeId: cart.value.storeId,
@@ -378,6 +399,7 @@ export const useCartStore = defineStore('cart', () => {
       items: remote.items.map((item) => ({
         id: item.id,
         productId: item.productId,
+        variantId: item.variantId ?? null,
         productName: item.productName,
         quantity: item.quantity,
         unitPriceInCents: item.unitPriceInCents,

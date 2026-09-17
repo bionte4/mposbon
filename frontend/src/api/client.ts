@@ -11,6 +11,11 @@ type AuthHeaders = {
   userEmail?: string | null;
 };
 
+type RequestOptions = {
+  /** Skip global error toasts (sync queue handles its own UX). */
+  silent?: boolean;
+};
+
 let authHeaders: AuthHeaders = {};
 let toastHandler: ((title: string, message?: string) => void) | null = null;
 
@@ -27,15 +32,25 @@ export function setApiToastHandler(handler: (title: string, message?: string) =>
   toastHandler = handler;
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const response = await rawRequest(method, path, body);
+async function request<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  options?: RequestOptions,
+): Promise<T> {
+  const response = await rawRequest(method, path, body, options);
   if (response.status === 204) {
     return undefined as T;
   }
   return (await response.json()) as T;
 }
 
-async function rawRequest(method: string, path: string, body?: unknown): Promise<Response> {
+async function rawRequest(
+  method: string,
+  path: string,
+  body?: unknown,
+  options?: RequestOptions,
+): Promise<Response> {
   const headers: Record<string, string> = {
     Accept: 'application/json',
     'Content-Type': 'application/json',
@@ -61,15 +76,17 @@ async function rawRequest(method: string, path: string, body?: unknown): Promise
     });
   } catch {
     const err = new ApiError('Network unavailable', 0);
-    const parsed = parseApiError(err);
-    toastHandler?.(parsed.title, parsed.message);
+    if (!options?.silent) {
+      const parsed = parseApiError(err);
+      toastHandler?.(parsed.title, parsed.message);
+    }
     throw err;
   }
 
   if (!response.ok) {
     const text = await response.text();
     const err = new ApiError(text || response.statusText, response.status);
-    let skipToast = false;
+    let skipToast = Boolean(options?.silent);
     try {
       const json = JSON.parse(text) as { code?: string };
       if (response.status === 409 && json.code === 'STOCK_CONFLICT') {
@@ -87,24 +104,24 @@ async function rawRequest(method: string, path: string, body?: unknown): Promise
   return response;
 }
 
-export function apiGet<T>(path: string): Promise<T> {
-  return request<T>('GET', path);
+export function apiGet<T>(path: string, options?: RequestOptions): Promise<T> {
+  return request<T>('GET', path, undefined, options);
 }
 
-export function apiPost<T>(path: string, body?: unknown): Promise<T> {
-  return request<T>('POST', path, body);
+export function apiPost<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
+  return request<T>('POST', path, body, options);
 }
 
-export function apiPut<T>(path: string, body?: unknown): Promise<T> {
-  return request<T>('PUT', path, body);
+export function apiPut<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
+  return request<T>('PUT', path, body, options);
 }
 
-export function apiPatch<T>(path: string, body?: unknown): Promise<T> {
-  return request<T>('PATCH', path, body);
+export function apiPatch<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
+  return request<T>('PATCH', path, body, options);
 }
 
-export function apiDelete<T>(path: string): Promise<T> {
-  return request<T>('DELETE', path);
+export function apiDelete<T>(path: string, options?: RequestOptions): Promise<T> {
+  return request<T>('DELETE', path, undefined, options);
 }
 
 /** Download binary/text responses (CSV exports). */

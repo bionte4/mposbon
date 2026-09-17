@@ -108,6 +108,13 @@ export const useCatalogStore = defineStore('catalog', () => {
       if (product.barcode) {
         codes.set(product.barcode, product);
       }
+      for (const v of product.variants ?? []) {
+        if (v.sku) {
+          codes.set(v.sku, product);
+          codes.set(v.sku.toLowerCase(), product);
+          codes.set(`variant:${v.sku}`, product);
+        }
+      }
     }
     productIndex.value = map;
     codeIndex.value = codes;
@@ -131,6 +138,7 @@ export const useCatalogStore = defineStore('catalog', () => {
       rows.map((row) => ({
         ...row,
         modifierGroups: Array.isArray(row.modifierGroups) ? row.modifierGroups : [],
+        variants: Array.isArray(row.variants) ? row.variants : [],
       })),
     );
   }
@@ -230,15 +238,24 @@ export const useCatalogStore = defineStore('catalog', () => {
     return productIndex.value.get(id);
   }
 
-  function findByBarcodeOrSku(code: string): CachedProduct | undefined {
+  /** Resolve product (+ variant when SKU matches a variant). */
+  function findByBarcodeOrSku(
+    code: string,
+  ): { product: CachedProduct; variantId: string | null } | undefined {
     const normalized = code.trim();
     if (!normalized) {
       return undefined;
     }
-    return (
-      codeIndex.value.get(normalized) ??
-      codeIndex.value.get(normalized.toLowerCase())
-    );
+    const product =
+      codeIndex.value.get(normalized) ?? codeIndex.value.get(normalized.toLowerCase());
+    if (!product) {
+      return undefined;
+    }
+    const variant =
+      product.variants?.find(
+        (v) => v.sku === normalized || v.sku.toLowerCase() === normalized.toLowerCase(),
+      ) ?? null;
+    return { product, variantId: variant?.id ?? null };
   }
 
   return {

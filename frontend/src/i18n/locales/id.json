@@ -88,6 +88,8 @@
     "localSale": "Transaksi lokal",
     "zDiscrepancy": "Z-Report selisih",
     "cart": "Keranjang",
+    "cashier": "Kasir",
+    "change": "Kembalian",
     "subtotal": "Subtotal",
     "tax": "Pajak",
     "total": "Total",
@@ -200,12 +202,17 @@
     "receipt": {
       "title": "Preview nota",
       "subtitle": "Periksa struk, lalu cetak atau lewati",
+      "tearHint": "Tarik struk ke bawah untuk sobek · lalu cetak ke printer",
       "print": "Cetak struk",
       "printing": "Mencetak…",
       "printOk": "Struk dicetak",
       "skip": "Lewati cetak",
       "copy": "Salin teks",
-      "copied": "Tersalin"
+      "copied": "Tersalin",
+      "savePng": "Simpan PNG",
+      "pull": "Tarik untuk sobek",
+      "scanRef": "Referensi transaksi",
+      "thanks": "Terima kasih · BonPOS"
     },
     "drawer": {
       "drop": "Setor kas",

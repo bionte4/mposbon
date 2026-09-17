@@ -88,6 +88,8 @@
     "localSale": "Local sale",
     "zDiscrepancy": "Z-Report discrepancy",
     "cart": "Cart",
+    "cashier": "Cashier",
+    "change": "Change",
     "subtotal": "Subtotal",
     "tax": "Tax",
     "total": "Total",
@@ -200,12 +202,17 @@
     "receipt": {
       "title": "Receipt preview",
       "subtitle": "Review the slip, then print or skip",
+      "tearHint": "Pull the slip down to tear · then print to the device",
       "print": "Print receipt",
       "printing": "Printing…",
       "printOk": "Receipt printed",
       "skip": "Skip print",
       "copy": "Copy text",
-      "copied": "Copied"
+      "copied": "Copied",
+      "savePng": "Save PNG",
+      "pull": "Pull to tear",
+      "scanRef": "Transaction reference",
+      "thanks": "Thank you · BonPOS"
     },
     "drawer": {
       "drop": "Cash drop",

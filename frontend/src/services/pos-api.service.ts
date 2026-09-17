@@ -142,7 +142,7 @@ export function fetchBootstrap(storeId?: string | null): Promise<PosBootstrap> {
 }
 
 export function postCart(payload: UpsertCartPayload) {
-  return apiPost('/pos/carts', payload);
+  return apiPost('/pos/carts', payload, { silent: true });
 }
 
 export type RemoteOpenCart = {
@@ -171,6 +171,7 @@ export type RemoteOpenCart = {
     taxInCents: number;
     lineSubtotalInCents: number;
     lineTotalInCents: number;
+    variantId?: string | null;
     modifiersJson: Array<{ optionId: string; name: string; priceDeltaInCents: number }> | null;
     guestIndex: number;
   }>;
@@ -181,7 +182,7 @@ export function fetchOpenCart(clientUuid: string): Promise<RemoteOpenCart> {
 }
 
 export function postSaleSync(payload: SyncSalePayload) {
-  return apiPost<{ duplicate: boolean }>('/pos/sales/sync', payload);
+  return apiPost<{ duplicate: boolean }>('/pos/sales/sync', payload, { silent: true });
 }
 
 export function clockIn(storeId: string, openingFloatInCents: number) {

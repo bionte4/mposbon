@@ -137,7 +137,19 @@ export async function flushSyncQueue(): Promise<FlushResult> {
         continue;
       }
 
+      const status = error instanceof ApiError ? error.status : 0;
       const message = error instanceof Error ? error.message : 'sync failed';
+      // Permanent client errors must not retry forever (toast storms).
+      if (status >= 400 && status < 500 && status !== 401 && status !== 408 && status !== 429) {
+        if (job.type === 'sale.sync') {
+          const saleId = (job.payload as SyncSalePayload).id;
+          await posDb.sales.update(saleId, { syncStatus: 'error' });
+        }
+        await posDb.syncQueue.delete(job.id);
+        flushed += 1;
+        continue;
+      }
+
       await posDb.syncQueue.update(job.id, {
         attempts: job.attempts + 1,
         lastError: message,

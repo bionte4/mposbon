@@ -281,6 +281,7 @@ export class PosService {
           tenantId: tenant.id,
           cartId,
           productId: line.productId,
+          variantId: line.variantId,
           productName: line.productName,
           quantity: line.quantity,
           unitPriceInCents: line.unitPriceInCents,

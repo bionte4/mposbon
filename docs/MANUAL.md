@@ -68,6 +68,9 @@ Keluar: tombol **Logout**.
 
 1. Ketuk produk di katalog (atau scan barcode).
 2. Pilih **modifier** / **varian** bila ada.
+   - Produk seperti **Teh Manis** wajib pilih varian (Regular / Large) sebelum masuk keranjang.
+   - Satu varian saja → otomatis dipilih; lebih dari satu → modal pilih muncul.
+   - Scan SKU varian (contoh `DRINK-TEH-L`) langsung menambah dengan varian itu.
 3. Atur qty di keranjang.
 4. Opsional: lampirkan pelanggan, promo/voucher, poin loyalty.
 
@@ -87,13 +90,24 @@ Keluar: tombol **Logout**.
 1. Ketuk bayar / checkout.
 2. Pilih metode:
    - **Tunai** — masukkan uang diterima; sistem hitung kembalian
-   - **QRIS** — tampil QR (payload toko atau Midtrans/Xendit)
+   - **QRIS** — tampil **QR pembayaran** (dari payload toko di Admin → Outlet, atau Midtrans/Xendit). Ini beda dengan QR di preview struk.
    - **Split** — kombinasi tunai + non-tunai
    - **Kartu** — sebagai jenis tender (belum terhubung EDC gateway)
 3. Opsional: tip.
-4. Konfirmasi → cetak struk bila printer siap.
+4. Konfirmasi → layar **preview nota** (shell printer).
 
-### 4.6 Aksi sensitif (perlu PIN supervisor)
+### 4.6 Preview struk & cetak
+
+Setelah bayar sukses:
+
+1. Tampil preview bergaya printer thermal (bisa **tarik ke bawah** untuk animasi sobek).
+2. **QR di kaki struk** = referensi transaksi (`BONPOS:` + ID sale), **bukan** QRIS bayar. Tidak ada setting Admin untuk QR ini.
+3. Aksi:
+   - **Cetak struk** → kirim ESC/POS ke printer (Web Serial / USB)
+   - **Simpan PNG** → unduh gambar struk
+   - **Salin teks** / **Lewati cetak**
+
+### 4.7 Aksi sensitif (perlu PIN supervisor)
 
 - Void transaksi (saat ini **seluruh sale**, bukan per baris)
 - Diskon manual
@@ -101,12 +115,14 @@ Keluar: tombol **Logout**.
 
 Minta Supervisor/Manager memasukkan PIN.
 
-### 4.7 Cash drop & tutup shift
+### 4.8 Cash drop & tutup shift
 
 1. **Cash drop / mid-count** — catat setoran di tengah shift.
 2. **X-Report** — ringkasan tanpa menutup shift.
-3. **Z-Report** — tutup shift + rekonsiliasi laci (kas aktual vs sistem).
-
+3. **Z-Report** — tutup shift + rekonsiliasi laci:
+   - Masukkan **kas fisik terhitung** dengan benar.
+   - Sistem bandingkan dengan kas diharapkan (float awal + penjualan tunai − drop, dll.).
+   - **Selisih** = dihitung − diharapkan. Isi `0` saat tutup → biasanya muncul selisih negatif besar.
 ---
 
 ## 5. Dapur (KDS)
@@ -144,7 +160,8 @@ Deep link contoh: `/admin/inventory?tab=transfer`.
 
 1. Hub **Outlet** → Toko.
 2. Tambah toko (kode + nama) atau edit: alamat, telepon, zona waktu, header/footer struk, aktif.
-3. Tempel **payload QRIS statis** (EMVCo MPM dari bank/PSP, biasanya panjang). Saat checkout, BonPOS membentuk QR dinamis dengan nominal.
+3. Tempel **payload QRIS statis** (EMVCo MPM dari bank/PSP, biasanya panjang). Saat **checkout → Bayar QRIS**, BonPOS membentuk QR dinamis dengan nominal.
+4. Header/footer struk di sini mempengaruhi teks identitas toko; **QR referensi di preview nota** (setelah bayar) digenerate otomatis dari ID transaksi — bukan dari field ini.
 
 ### 6.3 Stok toko & transfer
 
@@ -177,7 +194,19 @@ Deep link contoh: `/admin/inventory?tab=transfer`.
 ### Dashboard
 
 - Gross / Net sales, jumlah transaksi, AOV, produk terlaris.
-- Widget shift & selisih kas (sesuai role).
+- Widget shift & **Z-Report & selisih kas**.
+
+#### Apa arti badge “N selisih”?
+
+Contoh **`8 selisih`** = ada **8 Z-Report (tutup shift)** di daftar terbaru yang kas fisik **tidak sama** dengan kas diharapkan sistem (selisih ≠ 0).
+
+| Kolom di widget | Arti |
+|-----------------|------|
+| **Kotor** | Total penjualan shift (semua metode bayar) |
+| **dihitung** | Kas fisik yang diisi kasir saat clock-out |
+| **selisih** | dihitung − diharapkan (float + tunai − drop, dll.) |
+
+Bukan error stok. Sering muncul di demo jika tutup shift dengan **dihitung Rp 0** padahal ada float awal (mis. Rp 100.000).
 
 ### Laporan
 
@@ -210,6 +239,7 @@ Kasir **tidak** punya akses menu ini.
 | Perangkat | Cara kerja |
 |-----------|------------|
 | Printer thermal | ESC/POS via Web Serial → WebUSB → fallback hex preview |
+| Preview struk | Setelah bayar: shell printer + tarik-sobek struk, QR referensi, simpan PNG, lalu **Cetak struk** ke perangkat |
 | Laci kas | Perintah `ESC p` (buka paksa butuh PIN) |
 | Scanner barcode | Mode keyboard wedge (HID) |
 
@@ -237,10 +267,12 @@ Pastikan browser mengizinkan akses serial/USB. Printer Bluetooth native (seperti
 
 1. **Harga Admin** = Rupiah bulat (`25000` = Rp 25.000), lihat petunjuk di bawah field uang.
 2. Login ulang setelah perubahan role/izin agar session memuat permission baru.
-3. Selalu tutup shift dengan **Z-Report** di akhir hari.
-4. Uji QRIS di toko cabang sebelum go-live (payload terlalu pendek akan ditolak).
-5. Void saat ini membatalkan **seluruh** transaksi — koreksi item lebih aman sebelum bayar.
-6. Untuk demo dapur: login `kitchen@bonpos.local`, buka KDS; di POS fire menu yang sudah di-assign stasiun.
+3. Selalu tutup shift dengan **Z-Report** dan isi **kas terhitung** sesuai laci sungguhan.
+4. Uji QRIS di toko cabang sebelum go-live (payload terlalu pendek akan ditolak). Setting: Admin → Outlet → Payload QRIS.
+5. Jangan bingungkan **QR pembayaran QRIS** (saat checkout) dengan **QR referensi** di preview struk.
+6. Void saat ini membatalkan **seluruh** transaksi — koreksi item lebih aman sebelum bayar.
+7. Produk ber-varian wajib dipilih dulu; error `Variant required for …` berarti baris tanpa varian (refresh POS / pilih Regular·Large).
+8. Untuk demo dapur: login `kitchen@bonpos.local`, buka KDS; di POS fire menu yang sudah di-assign stasiun.
 
 ---
 
@@ -250,7 +282,11 @@ Pastikan browser mengizinkan akses serial/USB. Printer Bluetooth native (seperti
 |---------|-----|
 | Admin kosong / URL `/catalog` | Buka `/admin/catalog` (sudah ada redirect) |
 | KDS 403 | User harus punya `kitchen.display`; stasiun di-assign |
-| QRIS tidak muncul | Payload toko + izin bayar |
+| QRIS tidak muncul saat bayar | Admin → Outlet → payload QRIS toko + pilih metode QRIS di checkout |
+| QR di struk “apa artinya?” | Referensi sale ID (`BONPOS:…`), bukan QRIS bayar |
+| Badge “N selisih” di Dashboard | N Z-Report dengan variance kas ≠ 0 — isi hitung kas saat tutup shift |
+| `Variant required for Teh Manis` | Pilih varian; hard-refresh POS agar katalog/varian tersinkron |
+| Toast sync berulang | Refresh; antrean error permanen sudah di-drop otomatis |
 | Stok 0 di cabang | Set stok di Inventori → Stok toko (seed sering isi MAIN saja) |
 | Tidak bisa masuk Admin | Role tanpa `admin.access` |
 

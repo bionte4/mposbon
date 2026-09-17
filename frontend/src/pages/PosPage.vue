@@ -93,16 +93,31 @@ const scannerEnabled = computed(() => shiftOpen.value);
 useBarcodeScanner({
   enabled: scannerEnabled,
   onScan(code) {
-    const product = catalog.findByBarcodeOrSku(code);
-    if (!product) {
+    const hit = catalog.findByBarcodeOrSku(code);
+    if (!hit) {
       scanHint.value = t('pos.scan.notFound', { code });
       toast.warning(t('pos.scan.missTitle'), code);
       return;
     }
-    void onProductTap(product);
-    scanHint.value = t('pos.scan.added', { name: product.name });
+    if (hit.variantId) {
+      void onVariantScan(hit.product, hit.variantId);
+    } else {
+      void onProductTap(hit.product);
+    }
+    scanHint.value = t('pos.scan.added', { name: hit.product.name });
   },
 });
+
+async function onVariantScan(product: CachedProduct, variantId: string): Promise<void> {
+  if (!shiftOpen.value) return;
+  if (product.modifierGroups?.length) {
+    pendingVariantId.value = variantId;
+    modifierProduct.value = product;
+    return;
+  }
+  const item = await cartStore.addProduct(product.id, [], variantId);
+  if (item) await fireKitchenItem(product, item);
+}
 
 async function fireKitchenItem(
   product: CachedProduct,
@@ -132,7 +147,12 @@ async function fireKitchenItem(
 
 async function onProductTap(product: CachedProduct): Promise<void> {
   if (!shiftOpen.value) return;
-  if (product.variants?.length) {
+  const variants = product.variants ?? [];
+  if (variants.length === 1) {
+    await onVariantPick(variants[0]!.id);
+    return;
+  }
+  if (variants.length > 1) {
     variantProduct.value = product;
     return;
   }

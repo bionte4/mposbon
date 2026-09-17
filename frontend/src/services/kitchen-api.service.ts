@@ -23,6 +23,7 @@ export type KitchenTicketLine = {
 
 export type KitchenTicket = {
   orderId: string;
+  storeId?: string;
   cartClientUuid: string;
   tableLabel: string | null;
   createdAt: string;

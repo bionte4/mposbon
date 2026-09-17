@@ -114,9 +114,9 @@ const topChartOptions = {
 </script>
 
 <template>
-  <section class="mb-6 grid gap-4 lg:grid-cols-2">
-    <UiPanel :title="t('dashboard.salesTrend')">
-      <div class="h-64">
+  <section class="mb-3 grid gap-2 lg:grid-cols-2">
+    <UiPanel dense :title="t('dashboard.salesTrend')">
+      <div class="h-52">
         <Line
           v-if="overview?.scope === 'store' && (overview.series?.length ?? 0) > 0"
           :data="salesChart"
@@ -131,8 +131,8 @@ const topChartOptions = {
         </p>
       </div>
     </UiPanel>
-    <UiPanel :title="t('dashboard.topProducts')">
-      <div class="h-64">
+    <UiPanel dense :title="t('dashboard.topProducts')">
+      <div class="h-52">
         <Bar
           v-if="(top?.items.length ?? 0) > 0"
           :data="topChart"

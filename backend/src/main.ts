@@ -23,7 +23,9 @@ async function bootstrap(): Promise<void> {
       'X-Tenant-Slug',
       'X-User-Id',
       'X-User-Email',
+      'X-Api-Key',
       'X-Request-Id',
+      'Idempotency-Key',
     ],
   });
 

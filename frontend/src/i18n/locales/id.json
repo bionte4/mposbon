@@ -9,6 +9,7 @@
       "admin": "Admin",
       "kitchen": "Dapur (KDS)",
       "runtime": "Runtime",
+      "more": "Menu",
       "hrisDenied": "Kasir tidak punya akses HRIS",
       "adminDenied": "Kasir tidak punya akses Administrasi"
     },
@@ -35,7 +36,9 @@
     "loggedOut": "Berhasil logout",
     "welcome": "Selamat datang",
     "formRequired": "Email dan PIN wajib diisi",
-    "demoHint": "Akun demo (PIN 1234)"
+    "demoHint": "Akun demo (PIN 1234)",
+    "poweredBy": "Powered by BonPOS",
+    "secureHint": "Akses aman untuk kasir, dapur, dan manager"
   },
   "common": {
     "reload": "Muat ulang",
@@ -43,6 +46,9 @@
     "confirm": "Konfirmasi",
     "close": "Tutup",
     "delete": "Hapus",
+    "edit": "Ubah",
+    "save": "Simpan",
+    "actions": "Aksi",
     "retry": "Coba lagi",
     "all": "Semua",
     "empty": "—",
@@ -88,6 +94,8 @@
     "localSale": "Transaksi lokal",
     "zDiscrepancy": "Z-Report selisih",
     "cart": "Keranjang",
+    "cartMeta": "Pelanggan",
+    "cartMetaHide": "Tutup",
     "cashier": "Kasir",
     "change": "Kembalian",
     "subtotal": "Subtotal",
@@ -101,8 +109,11 @@
     "refund": "Refund",
     "clearCart": "Kosongkan",
     "connectPrinter": "Pasang printer",
+    "shiftTools": "Alat shift",
+    "shiftToolsHide": "Sembunyikan",
     "escposPreview": "ESC/POS preview",
     "emptyCart": "Ketuk produk atau scan barcode",
+    "emptyProducts": "Tidak ada produk di kategori ini",
     "cartScrollHint": "Geser untuk item lain",
     "moreActions": "Lainnya",
     "swipe": {
@@ -222,7 +233,7 @@
       "lanPrintFail": "Gagal cetak LAN",
       "lanCleared": "Konfigurasi LAN dihapus",
       "btTitle": "Bluetooth",
-      "btHint": "Browser tidak mendukung Bluetooth klasik (SPP) seperti app Moka. Pakai kabel USB, dongle USB, atau printer LAN/Wi‑Fi."
+      "btHint": "Browser tidak mendukung Bluetooth klasik (SPP) seperti aplikasi POS native. Pakai kabel USB, dongle USB, atau printer LAN/Wi‑Fi."
     },
     "promo": {
       "codePlaceholder": "Kode promo",
@@ -479,7 +490,8 @@
       "kitchen": "Stasiun dapur",
       "gl": "Jurnal / GL",
       "edge": "Edge sync",
-      "audit": "Audit trail"
+      "audit": "Audit trail",
+      "branding": "Branding login"
     },
     "sku": "SKU",
     "name": "Nama",
@@ -563,7 +575,7 @@
       "add": "Tambah toko",
       "created": "Toko ditambahkan"
     },
-    "qrisHint": "Tempel string QRIS statis (EMVCo MPM) dari bank/PSP. Saat bayar, BonPOS otomatis ubah jadi QR dinamis dengan nominal transaksi (mirip Odoo).",
+    "qrisHint": "Tempel string QRIS statis (EMVCo MPM) dari bank/PSP. Saat bayar, BonPOS otomatis ubah jadi QR dinamis dengan nominal transaksi.",
     "qrisPayload": "Payload QRIS (statis)",
     "qrisPlaceholder": "00020101021126…",
     "qrisSave": "Simpan QRIS",
@@ -698,9 +710,29 @@
       "activate": "Aktifkan"
     },
     "gl": {
-      "hint": "Chart of accounts + jurnal terposting (otomatis saat penjualan). Siap mapping Accurate / Jurnal.id.",
-      "emptyAccounts": "Belum ada akun — buka Admin setelah seed.",
-      "emptyEntries": "Belum ada jurnal."
+      "hint": "Chart of accounts + jurnal terposting. API: /api/v1/integrations/gl (COA, jurnal, API key, mapping, webhook).",
+      "emptyAccounts": "Belum ada akun — seed atau tambah di bawah.",
+      "emptyEntries": "Belum ada jurnal.",
+      "coaTitle": "Chart of accounts",
+      "entriesTitle": "Jurnal terposting",
+      "newAccount": "Akun baru",
+      "editAccount": "Ubah akun",
+      "cancelEdit": "Batal ubah",
+      "code": "Kode",
+      "name": "Nama",
+      "type": "Tipe",
+      "status": "Status",
+      "add": "Tambah akun",
+      "created": "Akun dibuat",
+      "saved": "Akun disimpan",
+      "activate": "Aktifkan",
+      "deactivate": "Nonaktifkan",
+      "activated": "Akun diaktifkan",
+      "deactivated": "Akun dinonaktifkan",
+      "active": "Aktif",
+      "inactive": "Nonaktif",
+      "showInactive": "Tampilkan nonaktif",
+      "readOnly": "Hanya baca — butuh izin finance write (Manager+)."
     },
     "edge": {
       "enabled": "Aktif",
@@ -710,16 +742,25 @@
       "push": "Push outbox sekarang",
       "pushOk": "Edge push selesai",
       "unavailable": "Status edge sync tidak tersedia"
+    },
+    "branding": {
+      "hint": "Tampil di halaman login per tenant. Tempel URL logo (CDN/S3) — tidak perlu modul upload terpisah.",
+      "brandName": "Nama merek",
+      "logoUrl": "URL logo",
+      "accentColor": "Warna aksen",
+      "saved": "Branding disimpan"
     }
   },
   "kitchen": {
     "title": "Kitchen Display",
-    "subtitle": "Ticket order aktif — tap untuk update status (Moka-style bump bar).",
+    "subtitle": "Ticket order aktif — ketuk untuk update status.",
     "empty": "Belum ada order dapur.",
     "loadFailed": "Gagal memuat ticket dapur",
     "bumpFailed": "Gagal update status",
     "noStore": "Pilih toko / login ulang",
-    "autoRefresh": "Auto-refresh 8 detik",
+    "autoRefresh": "Auto-refresh 5 detik · bel bunyi saat order baru",
+    "soundOn": "Suara nyala",
+    "soundOff": "Suara mati",
     "status": {
       "PREPARING": "Masak",
       "READY": "Siap",

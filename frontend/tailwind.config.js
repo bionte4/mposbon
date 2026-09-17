@@ -3,8 +3,13 @@ export default {
   content: ['./index.html', './src/**/*.{vue,js,ts,jsx,tsx}'],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['"Plus Jakarta Sans"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: ['"Plus Jakarta Sans"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+      },
       screens: {
-        // Wide POS / landscape tablets (~1024+) already covered by lg/xl.
+        // Landscape tablets / small POS terminals — dual-pane starts here.
+        tablet: '900px',
         // Extra-wide cashier terminals (dual-pane comfort).
         pos: '1280px',
         kiosk: '1536px',

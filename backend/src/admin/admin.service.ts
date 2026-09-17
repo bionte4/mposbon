@@ -268,6 +268,24 @@ export class AdminService {
       include: { category: { select: { id: true, name: true } } },
     });
 
+    // POS bootstrap prefers StorePrice over catalog. When catalog price changes,
+    // drop overrides that still mirrored the *previous* catalog price so cashiers
+    // see the new price. Intentional per-store overrides (≠ old catalog) are kept.
+    let clearedStorePriceOverrides = 0;
+    if (
+      input.unitPriceInCents !== undefined &&
+      input.unitPriceInCents !== existing.unitPriceInCents
+    ) {
+      const cleared = await this.prisma.db.storePrice.deleteMany({
+        where: {
+          tenantId: tenant.id,
+          productId: existing.id,
+          unitPriceInCents: existing.unitPriceInCents,
+        },
+      });
+      clearedStorePriceOverrides = cleared.count;
+    }
+
     await this.audit.log({
       action: ActivityAction.ADMIN_CATALOG_CHANGE,
       entityType: 'product',
@@ -285,6 +303,7 @@ export class AdminService {
           stockQty: product.stockQty,
           isActive: product.isActive,
         },
+        clearedStorePriceOverrides,
       },
     });
     return product;

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { KitchenLineStatus } from '@prisma/client';
 import { RequirePermissions } from '../auth/rbac.guard';
 import {
@@ -14,6 +14,7 @@ export class KitchenController {
   @Get('stations')
   @RequirePermissions('kitchen.display')
   listStations(@Query('storeId') storeId: string) {
+    if (!storeId?.trim()) throw new BadRequestException('storeId is required');
     return this.kitchen.listStations(storeId);
   }
 
@@ -38,6 +39,7 @@ export class KitchenController {
     @Query('storeId') storeId: string,
     @Query('stationId') stationId?: string,
   ) {
+    if (!storeId?.trim()) throw new BadRequestException('storeId is required');
     return this.kitchen.listActiveTickets(storeId, stationId);
   }
 

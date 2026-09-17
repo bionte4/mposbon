@@ -152,8 +152,8 @@ async function exportSales(): Promise<void> {
 </script>
 
 <template>
-  <main class="mx-auto max-w-6xl px-3 py-5 sm:px-4 sm:py-8">
-    <PageHeader :eyebrow="t('dashboard.eyebrow')" :title="t('dashboard.title')">
+  <main class="mx-auto max-w-6xl px-3 py-4 sm:px-4 sm:py-5">
+    <PageHeader compact :eyebrow="t('dashboard.eyebrow')" :title="t('dashboard.title')">
       <template #subtitleOnly>
         {{ t('dashboard.source') }}:
         <code class="rounded bg-slate-200 px-1">{{ overview?.source || '…' }}</code>
@@ -165,7 +165,7 @@ async function exportSales(): Promise<void> {
       <template #actions>
         <button
           v-if="canExport"
-          class="touch-target rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-800"
+          class="min-h-9 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800"
           type="button"
           :disabled="exporting"
           @click="exportSales"
@@ -174,7 +174,7 @@ async function exportSales(): Promise<void> {
         </button>
         <button
           v-if="canExport"
-          class="touch-target rounded-xl border border-teal-700 bg-teal-700 px-4 text-sm font-semibold text-white"
+          class="min-h-9 rounded-lg border border-teal-700 bg-teal-700 px-3 text-sm font-semibold text-white"
           type="button"
           :disabled="exporting"
           @click="exportJournal"
@@ -182,7 +182,7 @@ async function exportSales(): Promise<void> {
           {{ t('dashboard.exportJournal') }}
         </button>
         <button
-          class="touch-target rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white"
+          class="min-h-9 rounded-lg bg-slate-900 px-3 text-sm font-semibold text-white"
           type="button"
           :disabled="busy"
           @click="load"
@@ -194,13 +194,13 @@ async function exportSales(): Promise<void> {
 
     <section
       v-if="canFilterStore"
-      class="mb-4 grid gap-2 rounded-2xl border border-slate-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-5"
+      class="mb-3 grid gap-2 rounded-xl border border-slate-200 bg-white p-2.5 sm:grid-cols-2 lg:grid-cols-5"
     >
       <label class="text-sm font-medium text-slate-600">
         {{ t('dashboard.filterFrom') }}
         <input
           v-model="filterFrom"
-          class="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3"
+          class="mt-0.5 min-h-9 w-full rounded-lg border border-slate-300 px-2.5 text-sm"
           type="date"
         />
       </label>
@@ -208,7 +208,7 @@ async function exportSales(): Promise<void> {
         {{ t('dashboard.filterTo') }}
         <input
           v-model="filterTo"
-          class="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3"
+          class="mt-0.5 min-h-9 w-full rounded-lg border border-slate-300 px-2.5 text-sm"
           type="date"
         />
       </label>
@@ -216,7 +216,7 @@ async function exportSales(): Promise<void> {
         {{ t('dashboard.filterStore') }}
         <select
           v-model="filterStoreId"
-          class="mt-1 min-h-11 w-full rounded-xl border border-slate-300 px-3"
+          class="mt-0.5 min-h-9 w-full rounded-lg border border-slate-300 px-2.5 text-sm"
         >
           <option value="">{{ t('dashboard.filterAllStores') }}</option>
           <option v-for="s in stores" :key="s.id" :value="s.id">{{ s.code }} · {{ s.name }}</option>
@@ -225,21 +225,21 @@ async function exportSales(): Promise<void> {
       <div class="flex flex-wrap items-end gap-2 lg:col-span-1">
         <button
           type="button"
-          class="min-h-11 rounded-xl bg-slate-100 px-3 text-sm font-semibold"
+          class="min-h-9 rounded-lg bg-slate-100 px-2.5 text-sm font-semibold"
           @click="applyPreset(7)"
         >
           7d
         </button>
         <button
           type="button"
-          class="min-h-11 rounded-xl bg-slate-100 px-3 text-sm font-semibold"
+          class="min-h-9 rounded-lg bg-slate-100 px-2.5 text-sm font-semibold"
           @click="applyPreset(30)"
         >
           30d
         </button>
         <button
           type="button"
-          class="touch-target min-h-11 flex-1 rounded-xl bg-emerald-700 px-4 text-sm font-semibold text-white disabled:opacity-40"
+          class="min-h-9 flex-1 rounded-lg bg-emerald-700 px-3 text-sm font-semibold text-white disabled:opacity-40"
           :disabled="busy"
           @click="load"
         >
@@ -248,26 +248,31 @@ async function exportSales(): Promise<void> {
       </div>
     </section>
 
-    <p v-if="error" class="mb-4 rounded-2xl bg-red-50 p-3 text-red-800">{{ error }}</p>
+    <p v-if="error" class="mb-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-800">{{ error }}</p>
 
-    <section v-if="overview" class="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+    <section v-if="overview" class="mb-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
       <MetricCard
+        dense
         :label="t('dashboard.gross')"
         :value="formatIdrFromCents(overview.metrics.grossSalesInCents)"
       />
       <MetricCard
+        dense
         :label="t('dashboard.net')"
         :value="formatIdrFromCents(overview.metrics.netSalesInCents)"
       />
       <MetricCard
+        dense
         :label="t('dashboard.transactions')"
         :value="overview.metrics.transactionCount"
       />
       <MetricCard
+        dense
         :label="t('dashboard.aov')"
         :value="formatIdrFromCents(overview.metrics.aovInCents)"
       />
       <MetricCard
+        dense
         :label="t('dashboard.void')"
         :value="formatIdrFromCents(overview.metrics.voidInCents)"
         tone="danger"
@@ -276,7 +281,8 @@ async function exportSales(): Promise<void> {
 
     <UiPanel
       v-if="overview?.drawer"
-      class="mb-6 !border-amber-200 !bg-amber-50"
+      dense
+      class="mb-3 !border-amber-200 !bg-amber-50"
       :title="t('dashboard.drawerTitle')"
     >
       <div class="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
@@ -300,33 +306,33 @@ async function exportSales(): Promise<void> {
       </div>
     </UiPanel>
 
-    <div ref="chartSentinel" class="mb-6 min-h-[1px]">
+    <div ref="chartSentinel" class="mb-3 min-h-[1px]">
       <DashboardCharts v-if="chartsVisible" :overview="overview" :top="top" />
       <section
         v-else
-        class="grid gap-4 lg:grid-cols-2"
+        class="grid gap-2 lg:grid-cols-2"
         aria-hidden="true"
       >
-        <UiPanel :title="t('dashboard.salesTrend')">
-          <div class="flex h-64 items-center justify-center text-sm text-slate-400">
+        <UiPanel dense :title="t('dashboard.salesTrend')">
+          <div class="flex h-52 items-center justify-center text-sm text-slate-400">
             {{ t('dashboard.chartsLoading') }}
           </div>
         </UiPanel>
-        <UiPanel :title="t('dashboard.topProducts')">
-          <div class="flex h-64 items-center justify-center text-sm text-slate-400">
+        <UiPanel dense :title="t('dashboard.topProducts')">
+          <div class="flex h-52 items-center justify-center text-sm text-slate-400">
             {{ t('dashboard.chartsLoading') }}
           </div>
         </UiPanel>
       </section>
     </div>
 
-    <section class="grid gap-4 lg:grid-cols-2">
-      <UiPanel :title="t('dashboard.openShifts')">
-        <ul class="space-y-2">
+    <section class="grid gap-2 lg:grid-cols-2">
+      <UiPanel dense :title="t('dashboard.openShifts')">
+        <ul class="divide-y divide-slate-100 overflow-hidden rounded-lg ring-1 ring-slate-100">
           <li
             v-for="s in shifts?.openShifts ?? []"
             :key="s.shiftId"
-            class="rounded-xl bg-slate-50 px-3 py-2.5 text-sm"
+            class="bg-white px-2.5 py-1.5 text-sm"
           >
             <p class="font-medium">{{ s.cashier.displayName }} · {{ s.store.code }}</p>
             <p class="text-slate-600">
@@ -339,14 +345,14 @@ async function exportSales(): Promise<void> {
               }}
             </p>
           </li>
-          <li v-if="!(shifts?.openShifts.length)" class="text-sm text-slate-500">
+          <li v-if="!(shifts?.openShifts.length)" class="px-2.5 py-2 text-sm text-slate-500">
             {{ t('dashboard.noOpenShifts') }}
           </li>
         </ul>
       </UiPanel>
-      <UiPanel>
-        <div class="mb-3 flex items-center justify-between gap-2">
-          <h2 class="text-base font-semibold text-slate-900">{{ t('dashboard.zReports') }}</h2>
+      <UiPanel dense>
+        <div class="mb-2 flex items-center justify-between gap-2">
+          <h2 class="text-sm font-semibold text-slate-900">{{ t('dashboard.zReports') }}</h2>
           <span
             v-if="shifts?.discrepancyAlertCount"
             class="rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-800"
@@ -354,11 +360,11 @@ async function exportSales(): Promise<void> {
             {{ t('dashboard.discrepancyCount', { count: shifts.discrepancyAlertCount }) }}
           </span>
         </div>
-        <ul class="max-h-72 space-y-2 overflow-auto">
+        <ul class="max-h-72 divide-y divide-slate-100 overflow-auto rounded-lg ring-1 ring-slate-100">
           <li
             v-for="z in shifts?.zReports ?? []"
             :key="z.shiftId"
-            class="rounded-xl bg-slate-50 px-3 py-2.5 text-sm"
+            class="bg-white px-2.5 py-1.5 text-sm"
           >
             <p class="font-medium">{{ z.cashier.displayName }} · {{ z.store.name }}</p>
             <p class="text-slate-600">
@@ -377,7 +383,7 @@ async function exportSales(): Promise<void> {
               }}
             </p>
           </li>
-          <li v-if="!(shifts?.zReports.length)" class="text-sm text-slate-500">
+          <li v-if="!(shifts?.zReports.length)" class="px-2.5 py-2 text-sm text-slate-500">
             {{ t('dashboard.noZReports') }}
           </li>
         </ul>

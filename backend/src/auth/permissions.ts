@@ -35,7 +35,8 @@ export type Permission =
   | 'admin.outlet.write'
   | 'admin.staff.read'
   | 'admin.staff.write'
-  | 'admin.finance.read';
+  | 'admin.finance.read'
+  | 'admin.finance.write';
 
 const POS_BASE: Permission[] = [
   'pos.sale.create',
@@ -72,6 +73,7 @@ const ADMIN_ALL: Permission[] = [
   'admin.staff.read',
   'admin.staff.write',
   'admin.finance.read',
+  'admin.finance.write',
 ];
 
 /** Floor ops: opname, transfer, meja — no staff/GL/catalog master. */

@@ -288,6 +288,7 @@ export const useSyncStore = defineStore('sync', () => {
     window.addEventListener('online', () => {
       online.value = true;
       void flush();
+      void useCatalogStore().softRefreshFromApi(0);
     });
     window.addEventListener('offline', () => {
       online.value = false;

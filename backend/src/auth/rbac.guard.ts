@@ -9,7 +9,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { AuthedRequest } from './auth-resolution.middleware';
 import { AuthContext } from './auth-context';
-import { Permission, roleHasPermission } from './permissions';
+import { Permission } from './permissions';
 import { IS_PUBLIC_KEY } from './public.decorator';
 
 export const PERMISSIONS_KEY = 'permissions';
@@ -44,7 +44,7 @@ export class RbacGuard implements CanActivate {
     }
 
     for (const permission of required) {
-      if (!roleHasPermission(user.role, permission)) {
+      if (!user.permissions.includes(permission)) {
         throw new ForbiddenException(`Missing permission: ${permission}`);
       }
     }

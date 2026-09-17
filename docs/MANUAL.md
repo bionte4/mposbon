@@ -234,6 +234,7 @@ Kasir **tidak** punya akses menu ini.
 - Saat offline, kasir tetap bisa jualan; saat online, antrean tersinkron.
 - Mode **on-prem / edge sync** (compose onprem): sinkron hub pusat bila koneksi tersedia (lihat Admin → Sistem → Edge sync).
 - Pasang sebagai **PWA** dari browser untuk pengalaman seperti app.
+- **Tablet kasir (≥768px):** layout dua kolom **produk kiri | keranjang kanan** (penuh tinggi). Di HP: stack dengan keranjang max ~46% agar tombol Bayar tetap terlihat. Toolbar shift dilipat; nav sekunder di **Menu**.
 
 ---
 

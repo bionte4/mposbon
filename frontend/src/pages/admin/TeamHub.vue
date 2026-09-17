@@ -177,32 +177,32 @@ async function saveStaff(user: AdminStaff): Promise<void> {
 </script>
 
 <template>
-  <UiPanel :title="t('admin.tabs.staff')" :padded="false">
-    <div v-if="!canStaff" class="p-4 text-sm text-slate-500">{{ t('admin.denied') }}</div>
-    <div v-else class="space-y-4 p-4">
+  <UiPanel dense :title="t('admin.tabs.staff')" :padded="false">
+    <div v-if="!canStaff" class="px-3 py-2 text-sm text-slate-500">{{ t('admin.denied') }}</div>
+    <div v-else class="space-y-2 p-3">
       <div
         v-if="canStaffWrite"
-        class="grid gap-2 rounded-2xl bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-5"
+        class="grid gap-2 rounded-xl bg-slate-50 p-2.5 sm:grid-cols-2 lg:grid-cols-5"
       >
-        <label class="text-sm font-medium text-slate-600">
+        <label class="text-xs font-medium text-slate-600">
           {{ t('admin.name') }}
-          <input v-model="newStaff.displayName" class="mt-1 min-h-11 w-full rounded-xl border px-3" type="text" />
+          <input v-model="newStaff.displayName" class="mt-0.5 min-h-9 w-full rounded-lg border border-slate-300 px-2.5 text-sm" type="text" />
         </label>
-        <label class="text-sm font-medium text-slate-600">
+        <label class="text-xs font-medium text-slate-600">
           {{ t('admin.email') }}
-          <input v-model="newStaff.email" class="mt-1 min-h-11 w-full rounded-xl border px-3" type="email" autocomplete="off" />
+          <input v-model="newStaff.email" class="mt-0.5 min-h-9 w-full rounded-lg border border-slate-300 px-2.5 text-sm" type="email" autocomplete="off" />
         </label>
-        <label class="text-sm font-medium text-slate-600">
+        <label class="text-xs font-medium text-slate-600">
           {{ t('admin.role') }}
-          <select v-model="newStaff.role" class="mt-1 min-h-11 w-full rounded-xl border px-3">
+          <select v-model="newStaff.role" class="mt-0.5 min-h-9 w-full rounded-lg border border-slate-300 px-2.5 text-sm">
             <option v-for="r in assignableRoles" :key="r" :value="r">{{ r }}</option>
           </select>
         </label>
-        <label class="text-sm font-medium text-slate-600">
+        <label class="text-xs font-medium text-slate-600">
           {{ t('admin.staffPin') }}
           <input
             v-model="newStaff.pin"
-            class="mt-1 min-h-11 w-full rounded-xl border px-3 tabular-nums"
+            class="mt-0.5 min-h-9 w-full rounded-lg border border-slate-300 px-2.5 text-sm tabular-nums"
             type="password"
             inputmode="numeric"
             maxlength="8"
@@ -211,7 +211,7 @@ async function saveStaff(user: AdminStaff): Promise<void> {
         </label>
         <button
           type="button"
-          class="touch-target self-end rounded-2xl bg-slate-900 text-sm font-semibold text-white disabled:opacity-40"
+          class="min-h-9 self-end rounded-lg bg-slate-900 text-sm font-semibold text-white disabled:opacity-40"
           :disabled="busy"
           @click="addStaff"
         >
@@ -219,19 +219,19 @@ async function saveStaff(user: AdminStaff): Promise<void> {
         </button>
         <div
           v-if="newStaff.role === 'KITCHEN'"
-          class="sm:col-span-2 lg:col-span-5 flex flex-wrap gap-3 rounded-xl bg-white p-3 ring-1 ring-slate-200"
+          class="flex flex-wrap gap-2 rounded-lg bg-white p-2 ring-1 ring-slate-200 sm:col-span-2 lg:col-span-5"
         >
-          <span class="w-full text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <span class="w-full text-[10px] font-semibold uppercase tracking-wide text-slate-500">
             {{ t('admin.staffStations') }}
           </span>
           <label
             v-for="st in kitchenStations.filter((s) => s.isActive)"
             :key="st.id"
-            class="inline-flex items-center gap-2 text-sm"
+            class="inline-flex items-center gap-1.5 text-xs"
           >
             <input
               type="checkbox"
-              class="h-4 w-4"
+              class="h-3.5 w-3.5"
               :checked="newStaff.kitchenStationIds.includes(st.id)"
               @change="
                 toggleStaffStation(
@@ -246,45 +246,45 @@ async function saveStaff(user: AdminStaff): Promise<void> {
         </div>
       </div>
 
-      <div class="overflow-x-auto">
+      <div class="overflow-x-auto rounded-xl ring-1 ring-slate-200">
         <table class="min-w-full text-left text-sm">
           <thead class="border-b border-slate-200 bg-slate-50 text-slate-600">
             <tr>
-              <th class="px-3 py-2.5 font-medium">{{ t('admin.name') }}</th>
-              <th class="px-3 py-2.5 font-medium">{{ t('admin.email') }}</th>
-              <th class="px-3 py-2.5 font-medium">{{ t('admin.role') }}</th>
-              <th class="px-3 py-2.5 font-medium">{{ t('admin.staffStations') }}</th>
-              <th class="px-3 py-2.5 font-medium">{{ t('admin.status') }}</th>
-              <th v-if="canStaffWrite" class="px-3 py-2.5 font-medium">{{ t('admin.staffPin') }}</th>
-              <th v-if="canStaffWrite" class="px-3 py-2.5 font-medium" />
+              <th class="px-2.5 py-1.5 font-medium">{{ t('admin.name') }}</th>
+              <th class="px-2.5 py-1.5 font-medium">{{ t('admin.email') }}</th>
+              <th class="px-2.5 py-1.5 font-medium">{{ t('admin.role') }}</th>
+              <th class="px-2.5 py-1.5 font-medium">{{ t('admin.staffStations') }}</th>
+              <th class="px-2.5 py-1.5 font-medium">{{ t('admin.status') }}</th>
+              <th v-if="canStaffWrite" class="px-2.5 py-1.5 font-medium">{{ t('admin.staffPin') }}</th>
+              <th v-if="canStaffWrite" class="px-2.5 py-1.5 font-medium" />
             </tr>
           </thead>
           <tbody>
             <tr v-for="u in staff" :key="u.id" class="border-b border-slate-100 last:border-0">
-              <td class="px-3 py-2.5">
+              <td class="px-2.5 py-1.5">
                 <input
                   v-if="canEditStaffRow(u)"
                   v-model="staffDraftName[u.id]"
-                  class="min-h-10 w-full min-w-[8rem] rounded-lg border px-2"
+                  class="min-h-9 w-full min-w-[8rem] rounded-lg border px-2 text-sm"
                   type="text"
                 />
                 <span v-else class="font-medium">{{ u.displayName }}</span>
               </td>
-              <td class="px-3 py-2.5">{{ u.email }}</td>
-              <td class="px-3 py-2.5">
+              <td class="px-2.5 py-1.5">{{ u.email }}</td>
+              <td class="px-2.5 py-1.5">
                 <select
                   v-if="canEditStaffRow(u) && u.id !== auth.staff?.id"
                   v-model="staffDraftRole[u.id]"
-                  class="min-h-10 rounded-lg border px-2"
+                  class="min-h-9 rounded-lg border px-2 text-sm"
                 >
                   <option v-for="r in assignableRoles" :key="r" :value="r">{{ r }}</option>
                 </select>
                 <span v-else>{{ u.role }}</span>
               </td>
-              <td class="px-3 py-2.5">
+              <td class="px-2.5 py-1.5">
                 <div
                   v-if="(staffDraftRole[u.id] || u.role) === 'KITCHEN' && canEditStaffRow(u)"
-                  class="flex flex-wrap gap-2"
+                  class="flex flex-wrap gap-1.5"
                 >
                   <label
                     v-for="st in kitchenStations.filter((s) => s.isActive)"
@@ -316,21 +316,21 @@ async function saveStaff(user: AdminStaff): Promise<void> {
                 </span>
                 <span v-else class="text-xs text-slate-400">—</span>
               </td>
-              <td class="px-3 py-2.5">
+              <td class="px-2.5 py-1.5">
                 <label
                   v-if="canEditStaffRow(u) && u.id !== auth.staff?.id"
-                  class="inline-flex items-center gap-2"
+                  class="inline-flex items-center gap-2 text-xs"
                 >
-                  <input v-model="staffDraftActive[u.id]" type="checkbox" class="h-4 w-4" />
+                  <input v-model="staffDraftActive[u.id]" type="checkbox" class="h-3.5 w-3.5" />
                   {{ staffDraftActive[u.id] ? t('admin.active') : t('admin.inactive') }}
                 </label>
-                <span v-else>{{ u.isActive ? t('admin.active') : t('admin.inactive') }}</span>
+                <span v-else class="text-xs">{{ u.isActive ? t('admin.active') : t('admin.inactive') }}</span>
               </td>
-              <td v-if="canStaffWrite" class="px-3 py-2.5">
+              <td v-if="canStaffWrite" class="px-2.5 py-1.5">
                 <input
                   v-if="canEditStaffRow(u)"
                   v-model="staffDraftPin[u.id]"
-                  class="min-h-10 w-28 rounded-lg border px-2 tabular-nums"
+                  class="min-h-9 w-28 rounded-lg border px-2 text-sm tabular-nums"
                   type="password"
                   inputmode="numeric"
                   maxlength="8"
@@ -339,11 +339,11 @@ async function saveStaff(user: AdminStaff): Promise<void> {
                 />
                 <span v-else class="text-slate-400">—</span>
               </td>
-              <td v-if="canStaffWrite" class="px-3 py-2.5">
+              <td v-if="canStaffWrite" class="px-2.5 py-1.5">
                 <button
                   v-if="canEditStaffRow(u)"
                   type="button"
-                  class="rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40"
+                  class="min-h-8 rounded-lg bg-slate-900 px-2.5 text-xs font-semibold text-white disabled:opacity-40"
                   :disabled="busy"
                   @click="saveStaff(u)"
                 >
@@ -352,7 +352,7 @@ async function saveStaff(user: AdminStaff): Promise<void> {
               </td>
             </tr>
             <tr v-if="!staff.length">
-              <td class="px-3 py-8 text-slate-500" :colspan="canStaffWrite ? 7 : 5">
+              <td class="px-3 py-4 text-slate-500" :colspan="canStaffWrite ? 7 : 5">
                 {{ t('admin.emptyStaff') }}
               </td>
             </tr>

@@ -315,15 +315,16 @@ async function finalizeSlip(id: string): Promise<void> {
 </script>
 
 <template>
-  <main class="mx-auto max-w-6xl px-3 py-5 sm:px-4 sm:py-8">
+  <main class="mx-auto max-w-6xl px-3 py-4 sm:px-4 sm:py-5">
     <PageHeader
+      compact
       :eyebrow="t('hris.eyebrow')"
       :title="t('hris.title')"
       :subtitle="t('hris.subtitle')"
     >
       <template #actions>
         <button
-          class="touch-target rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white"
+          class="min-h-9 rounded-lg bg-slate-900 px-3 text-sm font-semibold text-white"
           type="button"
           :disabled="busy"
           @click="refresh"
@@ -333,27 +334,27 @@ async function finalizeSlip(id: string): Promise<void> {
       </template>
     </PageHeader>
 
-    <p v-if="error" class="mb-4 rounded-2xl bg-red-50 p-3 text-red-800">{{ error }}</p>
+    <p v-if="error" class="mb-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-800">{{ error }}</p>
 
     <template v-if="auth.has('hris.employee.read')">
-      <UiPanel class="mb-6" :title="t('hris.employees')">
+      <UiPanel dense class="mb-3" :title="t('hris.employees')">
         <div
           v-if="canWriteEmployee"
-          class="mb-4 grid gap-2 rounded-2xl bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-3"
+          class="mb-2 grid gap-2 rounded-xl bg-slate-50 p-2.5 sm:grid-cols-2 lg:grid-cols-3"
         >
           <label class="text-sm">
             {{ t('hris.code') }}
-            <input v-model="empForm.employeeCode" class="mt-1 min-h-11 w-full rounded-xl border px-3" />
+            <input v-model="empForm.employeeCode" class="mt-0.5 min-h-9 w-full rounded-lg border border-slate-300 px-2.5 text-sm" />
           </label>
           <label class="text-sm">
             {{ t('hris.name') }}
-            <input v-model="empForm.fullName" class="mt-1 min-h-11 w-full rounded-xl border px-3" />
+            <input v-model="empForm.fullName" class="mt-0.5 min-h-9 w-full rounded-lg border border-slate-300 px-2.5 text-sm" />
           </label>
           <label class="text-sm">
             {{ t('hris.hireDate') }}
             <input
               v-model="empForm.hireDate"
-              class="mt-1 min-h-11 w-full rounded-xl border px-3"
+              class="mt-0.5 min-h-9 w-full rounded-lg border border-slate-300 px-2.5 text-sm"
               type="date"
             />
           </label>
@@ -361,7 +362,7 @@ async function finalizeSlip(id: string): Promise<void> {
             {{ t('hris.baseSalary') }}
             <input
               v-model.number="empForm.baseSalaryRp"
-              class="mt-1 min-h-11 w-full rounded-xl border px-3 tabular-nums"
+              class="mt-0.5 min-h-9 w-full rounded-lg border border-slate-300 px-2.5 text-sm tabular-nums"
               type="number"
               min="0"
               step="1"
@@ -369,27 +370,27 @@ async function finalizeSlip(id: string): Promise<void> {
           </label>
           <label class="text-sm">
             {{ t('hris.ptkp') }}
-            <select v-model="empForm.ptkpStatus" class="mt-1 min-h-11 w-full rounded-xl border px-3">
+            <select v-model="empForm.ptkpStatus" class="mt-0.5 min-h-9 w-full rounded-lg border border-slate-300 px-2.5 text-sm">
               <option v-for="p in PTKP" :key="p" :value="p">{{ p }}</option>
             </select>
           </label>
           <label class="text-sm">
             {{ t('hris.workShift') }}
-            <select v-model="empForm.workShiftId" class="mt-1 min-h-11 w-full rounded-xl border px-3">
+            <select v-model="empForm.workShiftId" class="mt-0.5 min-h-9 w-full rounded-lg border border-slate-300 px-2.5 text-sm">
               <option value="">{{ t('common.empty') }}</option>
               <option v-for="s in shifts" :key="s.id" :value="s.id">{{ s.code }} — {{ s.name }}</option>
             </select>
           </label>
           <label v-if="empForm.id" class="text-sm">
             {{ t('hris.status') }}
-            <select v-model="empForm.status" class="mt-1 min-h-11 w-full rounded-xl border px-3">
+            <select v-model="empForm.status" class="mt-0.5 min-h-9 w-full rounded-lg border border-slate-300 px-2.5 text-sm">
               <option v-for="s in EMP_STATUS" :key="s" :value="s">{{ s }}</option>
             </select>
           </label>
           <div class="flex flex-wrap items-end gap-2 sm:col-span-2 lg:col-span-3">
             <button
               type="button"
-              class="touch-target rounded-xl bg-slate-900 px-4 font-semibold text-white disabled:opacity-50"
+              class="min-h-9 rounded-lg bg-slate-900 px-3 text-sm font-semibold text-white disabled:opacity-50"
               :disabled="busy"
               @click="saveEmployee"
             >
@@ -398,7 +399,7 @@ async function finalizeSlip(id: string): Promise<void> {
             <button
               v-if="empForm.id"
               type="button"
-              class="touch-target rounded-xl bg-white px-4 font-semibold ring-1 ring-slate-200"
+              class="min-h-9 rounded-lg bg-white px-3 text-sm font-semibold ring-1 ring-slate-200"
               @click="resetEmpForm"
             >
               {{ t('common.cancel') }}
@@ -410,13 +411,13 @@ async function finalizeSlip(id: string): Promise<void> {
           <table class="min-w-full text-left text-sm">
             <thead class="border-b border-slate-200 bg-slate-50 text-slate-600">
               <tr>
-                <th class="px-4 py-3 font-medium">{{ t('hris.code') }}</th>
-                <th class="px-4 py-3 font-medium">{{ t('hris.name') }}</th>
-                <th class="px-4 py-3 font-medium">{{ t('hris.baseSalary') }}</th>
-                <th class="px-4 py-3 font-medium">{{ t('hris.ptkp') }}</th>
-                <th class="px-4 py-3 font-medium">{{ t('hris.workShift') }}</th>
-                <th class="px-4 py-3 font-medium">{{ t('hris.status') }}</th>
-                <th v-if="canWriteEmployee" class="px-4 py-3 font-medium" />
+                <th class="px-2.5 py-1.5 font-medium">{{ t('hris.code') }}</th>
+                <th class="px-2.5 py-1.5 font-medium">{{ t('hris.name') }}</th>
+                <th class="px-2.5 py-1.5 font-medium">{{ t('hris.baseSalary') }}</th>
+                <th class="px-2.5 py-1.5 font-medium">{{ t('hris.ptkp') }}</th>
+                <th class="px-2.5 py-1.5 font-medium">{{ t('hris.workShift') }}</th>
+                <th class="px-2.5 py-1.5 font-medium">{{ t('hris.status') }}</th>
+                <th v-if="canWriteEmployee" class="px-2.5 py-1.5 font-medium" />
               </tr>
             </thead>
             <tbody>
@@ -425,15 +426,15 @@ async function finalizeSlip(id: string): Promise<void> {
                 :key="emp.id"
                 class="border-b border-slate-100 last:border-0"
               >
-                <td class="px-4 py-3 font-medium">{{ emp.employeeCode }}</td>
-                <td class="px-4 py-3">{{ emp.fullName }}</td>
-                <td class="px-4 py-3 tabular-nums">
+                <td class="px-2.5 py-1.5 font-medium">{{ emp.employeeCode }}</td>
+                <td class="px-2.5 py-1.5">{{ emp.fullName }}</td>
+                <td class="px-2.5 py-1.5 tabular-nums">
                   {{ formatIdrFromCents(emp.baseSalaryInCents) }}
                 </td>
-                <td class="px-4 py-3">{{ emp.ptkpStatus }}</td>
-                <td class="px-4 py-3">{{ emp.workShift?.name || t('common.empty') }}</td>
-                <td class="px-4 py-3">{{ emp.status }}</td>
-                <td v-if="canWriteEmployee" class="px-4 py-3">
+                <td class="px-2.5 py-1.5">{{ emp.ptkpStatus }}</td>
+                <td class="px-2.5 py-1.5">{{ emp.workShift?.name || t('common.empty') }}</td>
+                <td class="px-2.5 py-1.5">{{ emp.status }}</td>
+                <td v-if="canWriteEmployee" class="px-2.5 py-1.5">
                   <button
                     type="button"
                     class="text-sm font-semibold text-sky-700"
@@ -444,7 +445,7 @@ async function finalizeSlip(id: string): Promise<void> {
                 </td>
               </tr>
               <tr v-if="!employees.length">
-                <td class="px-4 py-8 text-slate-500" :colspan="canWriteEmployee ? 7 : 6">
+                <td class="px-3 py-4 text-slate-500" :colspan="canWriteEmployee ? 7 : 6">
                   {{ t('hris.emptyEmployees') }}
                 </td>
               </tr>
@@ -453,25 +454,25 @@ async function finalizeSlip(id: string): Promise<void> {
         </div>
       </UiPanel>
 
-      <section class="mb-6 grid gap-4 lg:grid-cols-2">
-        <UiPanel :title="t('hris.schedules')">
+      <section class="mb-3 grid gap-2 lg:grid-cols-2">
+        <UiPanel dense :title="t('hris.schedules')">
           <div
             v-if="canWriteShift"
-            class="mb-3 grid gap-2 rounded-xl bg-slate-50 p-3 sm:grid-cols-2"
+            class="mb-2 grid gap-2 rounded-xl bg-slate-50 p-2.5 sm:grid-cols-2"
           >
             <label class="text-sm">
               {{ t('hris.code') }}
-              <input v-model="shiftForm.code" class="mt-1 min-h-11 w-full rounded-xl border px-3" />
+              <input v-model="shiftForm.code" class="mt-0.5 min-h-9 w-full rounded-lg border border-slate-300 px-2.5 text-sm" />
             </label>
             <label class="text-sm">
               {{ t('hris.name') }}
-              <input v-model="shiftForm.name" class="mt-1 min-h-11 w-full rounded-xl border px-3" />
+              <input v-model="shiftForm.name" class="mt-0.5 min-h-9 w-full rounded-lg border border-slate-300 px-2.5 text-sm" />
             </label>
             <label class="text-sm">
               {{ t('hris.start') }}
               <input
                 v-model="shiftForm.startHhmm"
-                class="mt-1 min-h-11 w-full rounded-xl border px-3"
+                class="mt-0.5 min-h-9 w-full rounded-lg border border-slate-300 px-2.5 text-sm"
                 type="time"
               />
             </label>
@@ -479,7 +480,7 @@ async function finalizeSlip(id: string): Promise<void> {
               {{ t('hris.end') }}
               <input
                 v-model="shiftForm.endHhmm"
-                class="mt-1 min-h-11 w-full rounded-xl border px-3"
+                class="mt-0.5 min-h-9 w-full rounded-lg border border-slate-300 px-2.5 text-sm"
                 type="time"
               />
             </label>
@@ -487,7 +488,7 @@ async function finalizeSlip(id: string): Promise<void> {
               {{ t('hris.breakMin') }}
               <input
                 v-model.number="shiftForm.breakMinutes"
-                class="mt-1 min-h-11 w-full rounded-xl border px-3"
+                class="mt-0.5 min-h-9 w-full rounded-lg border border-slate-300 px-2.5 text-sm"
                 type="number"
                 min="0"
               />
@@ -495,7 +496,7 @@ async function finalizeSlip(id: string): Promise<void> {
             <div class="flex flex-wrap items-end gap-2 sm:col-span-2">
               <button
                 type="button"
-                class="touch-target rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white"
+                class="min-h-9 rounded-lg bg-slate-900 px-3 text-sm font-semibold text-white"
                 :disabled="busy"
                 @click="saveShift"
               >
@@ -504,18 +505,18 @@ async function finalizeSlip(id: string): Promise<void> {
               <button
                 v-if="shiftForm.id"
                 type="button"
-                class="touch-target rounded-xl bg-white px-4 text-sm font-semibold ring-1 ring-slate-200"
+                class="min-h-9 rounded-lg bg-white px-3 text-sm font-semibold ring-1 ring-slate-200"
                 @click="resetShiftForm"
               >
                 {{ t('common.cancel') }}
               </button>
             </div>
           </div>
-          <ul class="space-y-2">
+          <ul class="divide-y divide-slate-100 overflow-hidden rounded-lg ring-1 ring-slate-100">
             <li
               v-for="shift in shifts"
               :key="shift.id"
-              class="flex items-start justify-between gap-2 rounded-xl bg-slate-50 px-4 py-3"
+              class="flex items-start justify-between gap-2 bg-white px-2.5 py-1.5"
             >
               <div>
                 <p class="font-medium">
@@ -543,18 +544,18 @@ async function finalizeSlip(id: string): Promise<void> {
                 {{ t('hris.edit') }}
               </button>
             </li>
-            <li v-if="!shifts.length" class="text-sm text-slate-500">{{ t('hris.emptyShifts') }}</li>
+            <li v-if="!shifts.length" class="px-2.5 py-2 text-sm text-slate-500">{{ t('hris.emptyShifts') }}</li>
           </ul>
         </UiPanel>
 
-        <UiPanel :title="t('hris.attendance')">
+        <UiPanel dense :title="t('hris.attendance')">
           <div
             v-if="canWriteAttendance"
-            class="mb-3 grid gap-2 rounded-xl bg-slate-50 p-3 sm:grid-cols-2"
+            class="mb-2 grid gap-2 rounded-xl bg-slate-50 p-2.5 sm:grid-cols-2"
           >
             <label class="text-sm sm:col-span-2">
               {{ t('hris.employee') }}
-              <select v-model="attForm.employeeId" class="mt-1 min-h-11 w-full rounded-xl border px-3">
+              <select v-model="attForm.employeeId" class="mt-0.5 min-h-9 w-full rounded-lg border border-slate-300 px-2.5 text-sm">
                 <option v-for="emp in employees" :key="emp.id" :value="emp.id">
                   {{ emp.employeeCode }} — {{ emp.fullName }}
                 </option>
@@ -564,13 +565,13 @@ async function finalizeSlip(id: string): Promise<void> {
               {{ t('hris.workDate') }}
               <input
                 v-model="attForm.workDate"
-                class="mt-1 min-h-11 w-full rounded-xl border px-3"
+                class="mt-0.5 min-h-9 w-full rounded-lg border border-slate-300 px-2.5 text-sm"
                 type="date"
               />
             </label>
             <label class="text-sm">
               {{ t('hris.status') }}
-              <select v-model="attForm.status" class="mt-1 min-h-11 w-full rounded-xl border px-3">
+              <select v-model="attForm.status" class="mt-0.5 min-h-9 w-full rounded-lg border border-slate-300 px-2.5 text-sm">
                 <option v-for="s in ATT_STATUS" :key="s" :value="s">{{ s }}</option>
               </select>
             </label>
@@ -578,7 +579,7 @@ async function finalizeSlip(id: string): Promise<void> {
               {{ t('hris.clockIn') }}
               <input
                 v-model="attForm.clockIn"
-                class="mt-1 min-h-11 w-full rounded-xl border px-3"
+                class="mt-0.5 min-h-9 w-full rounded-lg border border-slate-300 px-2.5 text-sm"
                 type="time"
               />
             </label>
@@ -586,24 +587,24 @@ async function finalizeSlip(id: string): Promise<void> {
               {{ t('hris.clockOut') }}
               <input
                 v-model="attForm.clockOut"
-                class="mt-1 min-h-11 w-full rounded-xl border px-3"
+                class="mt-0.5 min-h-9 w-full rounded-lg border border-slate-300 px-2.5 text-sm"
                 type="time"
               />
             </label>
             <button
               type="button"
-              class="touch-target rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white sm:col-span-2"
+              class="min-h-9 rounded-lg bg-slate-900 px-3 text-sm font-semibold text-white sm:col-span-2"
               :disabled="busy"
               @click="saveAttendance"
             >
               {{ t('hris.saveAttendance') }}
             </button>
           </div>
-          <ul class="max-h-64 space-y-2 overflow-auto">
+          <ul class="max-h-64 divide-y divide-slate-100 overflow-auto rounded-lg ring-1 ring-slate-100">
             <li
               v-for="row in attendances"
               :key="row.id"
-              class="rounded-xl bg-slate-50 px-4 py-3 text-sm"
+              class="bg-white px-2.5 py-1.5 text-sm"
             >
               <p class="font-medium">{{ row.employee.fullName }}</p>
               <p class="text-slate-600">
@@ -616,20 +617,20 @@ async function finalizeSlip(id: string): Promise<void> {
                 }}
               </p>
             </li>
-            <li v-if="!attendances.length" class="text-sm text-slate-500">
+            <li v-if="!attendances.length" class="px-2.5 py-2 text-sm text-slate-500">
               {{ t('hris.emptyAttendance') }}
             </li>
           </ul>
         </UiPanel>
       </section>
 
-      <UiPanel :title="t('hris.payroll')">
-        <div class="flex flex-wrap items-end gap-3 rounded-xl bg-slate-50 p-4">
+      <UiPanel dense :title="t('hris.payroll')">
+        <div class="flex flex-wrap items-end gap-2 rounded-xl bg-slate-50 p-2.5">
           <div>
             <label class="text-sm text-slate-600">{{ t('hris.employee') }}</label>
             <select
               v-model="selectedEmployeeId"
-              class="mt-1 min-h-12 rounded-xl border border-slate-300 bg-white px-3"
+              class="mt-0.5 min-h-9 rounded-lg border border-slate-300 bg-white px-2.5 text-sm"
             >
               <option v-for="emp in employees" :key="emp.id" :value="emp.id">
                 {{ emp.employeeCode }} — {{ emp.fullName }}
@@ -640,7 +641,7 @@ async function finalizeSlip(id: string): Promise<void> {
             <label class="text-sm text-slate-600">{{ t('hris.year') }}</label>
             <input
               v-model.number="periodYear"
-              class="mt-1 min-h-12 w-28 rounded-xl border border-slate-300 px-3"
+              class="mt-0.5 min-h-9 w-24 rounded-lg border border-slate-300 px-2.5 text-sm"
               type="number"
             />
           </div>
@@ -648,7 +649,7 @@ async function finalizeSlip(id: string): Promise<void> {
             <label class="text-sm text-slate-600">{{ t('hris.month') }}</label>
             <input
               v-model.number="periodMonth"
-              class="mt-1 min-h-12 w-20 rounded-xl border border-slate-300 px-3"
+              class="mt-0.5 min-h-9 w-16 rounded-lg border border-slate-300 px-2.5 text-sm"
               type="number"
               min="1"
               max="12"
@@ -656,7 +657,7 @@ async function finalizeSlip(id: string): Promise<void> {
           </div>
           <button
             v-if="canPayroll"
-            class="touch-target rounded-xl bg-slate-900 px-4 font-semibold text-white disabled:opacity-50"
+            class="min-h-9 rounded-lg bg-slate-900 px-3 text-sm font-semibold text-white disabled:opacity-50"
             type="button"
             :disabled="busy"
             @click="runPayroll"
@@ -665,44 +666,44 @@ async function finalizeSlip(id: string): Promise<void> {
           </button>
         </div>
 
-        <div class="mt-4 overflow-x-auto rounded-xl border border-slate-200">
+        <div class="mt-2 overflow-x-auto rounded-xl border border-slate-200">
           <table class="min-w-full text-left text-sm">
             <thead class="border-b border-slate-200 bg-slate-50 text-slate-600">
               <tr>
-                <th class="px-3 py-2.5 font-medium">{{ t('hris.employee') }}</th>
-                <th class="px-3 py-2.5 font-medium">{{ t('hris.period') }}</th>
-                <th class="px-3 py-2.5 font-medium">{{ t('hris.gross') }}</th>
-                <th class="px-3 py-2.5 font-medium">{{ t('hris.overtime') }}</th>
-                <th class="px-3 py-2.5 font-medium">{{ t('hris.pph21') }}</th>
-                <th class="px-3 py-2.5 font-medium">{{ t('hris.net') }}</th>
-                <th class="px-3 py-2.5 font-medium">{{ t('hris.status') }}</th>
-                <th v-if="canPayroll" class="px-3 py-2.5 font-medium" />
+                <th class="px-2.5 py-1.5 font-medium">{{ t('hris.employee') }}</th>
+                <th class="px-2.5 py-1.5 font-medium">{{ t('hris.period') }}</th>
+                <th class="px-2.5 py-1.5 font-medium">{{ t('hris.gross') }}</th>
+                <th class="px-2.5 py-1.5 font-medium">{{ t('hris.overtime') }}</th>
+                <th class="px-2.5 py-1.5 font-medium">{{ t('hris.pph21') }}</th>
+                <th class="px-2.5 py-1.5 font-medium">{{ t('hris.net') }}</th>
+                <th class="px-2.5 py-1.5 font-medium">{{ t('hris.status') }}</th>
+                <th v-if="canPayroll" class="px-2.5 py-1.5 font-medium" />
               </tr>
             </thead>
             <tbody>
               <tr v-for="slip in slips" :key="slip.id" class="border-b border-slate-100 last:border-0">
-                <td class="px-3 py-2.5">{{ slip.employee.fullName }}</td>
-                <td class="px-3 py-2.5 tabular-nums">
+                <td class="px-2.5 py-1.5">{{ slip.employee.fullName }}</td>
+                <td class="px-2.5 py-1.5 tabular-nums">
                   {{ slip.periodYear }}-{{ String(slip.periodMonth).padStart(2, '0') }}
                 </td>
-                <td class="px-3 py-2.5 tabular-nums">
+                <td class="px-2.5 py-1.5 tabular-nums">
                   {{ formatIdrFromCents(slip.grossInCents) }}
                 </td>
-                <td class="px-3 py-2.5 tabular-nums">
+                <td class="px-2.5 py-1.5 tabular-nums">
                   {{ formatIdrFromCents(slip.overtimePayInCents) }}
                 </td>
-                <td class="px-3 py-2.5 tabular-nums">
+                <td class="px-2.5 py-1.5 tabular-nums">
                   {{ formatIdrFromCents(slip.pph21InCents) }}
                 </td>
-                <td class="px-3 py-2.5 font-semibold tabular-nums">
+                <td class="px-2.5 py-1.5 font-semibold tabular-nums">
                   {{ formatIdrFromCents(slip.netInCents) }}
                 </td>
-                <td class="px-3 py-2.5">{{ slip.status }}</td>
-                <td v-if="canPayroll" class="px-3 py-2.5">
+                <td class="px-2.5 py-1.5">{{ slip.status }}</td>
+                <td v-if="canPayroll" class="px-2.5 py-1.5">
                   <button
                     v-if="slip.status === 'DRAFT'"
                     type="button"
-                    class="text-sm font-semibold text-emerald-700"
+                    class="text-xs font-semibold text-emerald-700"
                     :disabled="busy"
                     @click="finalizeSlip(slip.id)"
                   >
@@ -711,7 +712,7 @@ async function finalizeSlip(id: string): Promise<void> {
                 </td>
               </tr>
               <tr v-if="!slips.length">
-                <td class="px-3 py-8 text-slate-500" :colspan="canPayroll ? 8 : 7">
+                <td class="px-3 py-4 text-slate-500" :colspan="canPayroll ? 8 : 7">
                   {{ t('hris.emptySlips') }}
                 </td>
               </tr>

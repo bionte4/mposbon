@@ -9,6 +9,7 @@
       "admin": "Admin",
       "kitchen": "Kitchen (KDS)",
       "runtime": "Runtime",
+      "more": "Menu",
       "hrisDenied": "Cashiers cannot access HRIS",
       "adminDenied": "Cashiers cannot access Administration"
     },
@@ -35,7 +36,9 @@
     "loggedOut": "Signed out",
     "welcome": "Welcome",
     "formRequired": "Email and PIN are required",
-    "demoHint": "Demo accounts (PIN 1234)"
+    "demoHint": "Demo accounts (PIN 1234)",
+    "poweredBy": "Powered by BonPOS",
+    "secureHint": "Secure access for cashiers, kitchen, and managers"
   },
   "common": {
     "reload": "Reload",
@@ -43,6 +46,9 @@
     "confirm": "Confirm",
     "close": "Close",
     "delete": "Delete",
+    "edit": "Edit",
+    "save": "Save",
+    "actions": "Actions",
     "retry": "Try again",
     "all": "All",
     "empty": "—",
@@ -88,6 +94,8 @@
     "localSale": "Local sale",
     "zDiscrepancy": "Z-Report discrepancy",
     "cart": "Cart",
+    "cartMeta": "Customer",
+    "cartMetaHide": "Close",
     "cashier": "Cashier",
     "change": "Change",
     "subtotal": "Subtotal",
@@ -101,8 +109,11 @@
     "refund": "Refund",
     "clearCart": "Clear cart",
     "connectPrinter": "Pair printer",
+    "shiftTools": "Shift tools",
+    "shiftToolsHide": "Hide",
     "escposPreview": "ESC/POS preview",
     "emptyCart": "Tap a product or scan a barcode",
+    "emptyProducts": "No products in this category",
     "cartScrollHint": "Scroll for more items",
     "moreActions": "More",
     "swipe": {
@@ -479,7 +490,8 @@
       "kitchen": "Kitchen stations",
       "gl": "Journal / GL",
       "edge": "Edge sync",
-      "audit": "Audit trail"
+      "audit": "Audit trail",
+      "branding": "Login branding"
     },
     "sku": "SKU",
     "name": "Name",
@@ -563,7 +575,7 @@
       "add": "Add store",
       "created": "Store created"
     },
-    "qrisHint": "Paste the static QRIS string (EMVCo MPM) from your bank/PSP. At checkout, BonPOS converts it to a dynamic QR with the sale amount embedded (Odoo-style).",
+    "qrisHint": "Paste the static QRIS string (EMVCo MPM) from your bank/PSP. At checkout, BonPOS converts it to a dynamic QR with the sale amount embedded.",
     "qrisPayload": "QRIS payload (static)",
     "qrisPlaceholder": "00020101021126…",
     "qrisSave": "Save QRIS",
@@ -698,9 +710,29 @@
       "activate": "Activate"
     },
     "gl": {
-      "hint": "Chart of accounts + posted journal (auto on sale). Ready for Accurate / Jurnal.id mapping.",
-      "emptyAccounts": "No accounts yet — open Admin after seed.",
-      "emptyEntries": "No journal entries yet."
+      "hint": "Chart of accounts + posted journal. API: /api/v1/integrations/gl (COA, journals, API keys, mappings, webhooks).",
+      "emptyAccounts": "No accounts yet — seed or add below.",
+      "emptyEntries": "No journal entries yet.",
+      "coaTitle": "Chart of accounts",
+      "entriesTitle": "Posted journals",
+      "newAccount": "New account",
+      "editAccount": "Edit account",
+      "cancelEdit": "Cancel edit",
+      "code": "Code",
+      "name": "Name",
+      "type": "Type",
+      "status": "Status",
+      "add": "Add account",
+      "created": "Account created",
+      "saved": "Account saved",
+      "activate": "Activate",
+      "deactivate": "Deactivate",
+      "activated": "Account activated",
+      "deactivated": "Account deactivated",
+      "active": "Active",
+      "inactive": "Inactive",
+      "showInactive": "Show inactive",
+      "readOnly": "Read-only — needs finance write (Manager+)."
     },
     "edge": {
       "enabled": "Enabled",
@@ -710,16 +742,25 @@
       "push": "Push outbox now",
       "pushOk": "Edge push finished",
       "unavailable": "Edge sync status unavailable"
+    },
+    "branding": {
+      "hint": "Shown on the per-tenant login screen. Paste a logo URL (CDN/S3) — no separate upload module required.",
+      "brandName": "Brand name",
+      "logoUrl": "Logo URL",
+      "accentColor": "Accent color",
+      "saved": "Branding saved"
     }
   },
   "kitchen": {
     "title": "Kitchen Display",
-    "subtitle": "Active tickets — tap to bump status (Moka-style).",
+    "subtitle": "Active tickets — tap to update status.",
     "empty": "No kitchen tickets yet.",
     "loadFailed": "Failed to load kitchen tickets",
     "bumpFailed": "Failed to update status",
     "noStore": "Select a store / log in again",
-    "autoRefresh": "Auto-refresh every 8s",
+    "autoRefresh": "Auto-refresh every 5s · bell alerts on new routes",
+    "soundOn": "Sound on",
+    "soundOff": "Sound off",
     "status": {
       "PREPARING": "Prep",
       "READY": "Ready",

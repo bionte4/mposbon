@@ -31,21 +31,24 @@ export const AuthContext = {
   },
 };
 
-export function toAuthUser(row: {
-  id: string;
-  tenantId: string;
-  email: string;
-  displayName: string;
-  role: StaffRole;
-  kitchenStationIds?: string[];
-}): AuthUser {
+export function toAuthUser(
+  row: {
+    id: string;
+    tenantId: string;
+    email: string;
+    displayName: string;
+    role: StaffRole;
+    kitchenStationIds?: string[];
+  },
+  permissionOverride?: Permission[],
+): AuthUser {
   return {
     id: row.id,
     tenantId: row.tenantId,
     email: row.email,
     displayName: row.displayName,
     role: row.role,
-    permissions: permissionsForRole(row.role),
+    permissions: permissionOverride ?? permissionsForRole(row.role),
     kitchenStationIds: row.kitchenStationIds ?? [],
   };
 }

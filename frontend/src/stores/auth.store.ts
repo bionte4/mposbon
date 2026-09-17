@@ -1,7 +1,12 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { clearApiAuth, setApiAuth } from '../api/client';
-import { can, type Permission, type StaffRole } from '../auth/permissions';
+import {
+  can,
+  roleHasPermission,
+  type Permission,
+  type StaffRole,
+} from '../auth/permissions';
 import { fetchAuthMe, loginStaff } from '../services/auth-api.service';
 
 const TOKEN_KEY = 'bonpos.accessToken';
@@ -52,6 +57,11 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function has(permission: Permission): boolean {
+    // Prefer live role matrix so new permissions apply after FE reload
+    // even if /auth/me still returns a stale permissions snapshot.
+    if (role.value && roleHasPermission(role.value, permission)) {
+      return true;
+    }
     return can(permissions.value, permission);
   }
 

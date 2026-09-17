@@ -291,7 +291,7 @@ async function saveInventoryRow(item: StoreInventoryItem): Promise<void> {
     });
     toast.success(t('admin.inventory.saved'));
     await loadInventory(inventoryStoreId.value);
-    void catalog.refreshFromApi();
+    void catalog.refreshFromApi().then(() => catalog.broadcastInvalidate());
   } catch (err) {
     shell.setError(err instanceof Error ? err.message : t('admin.loadFailed'));
   } finally {
@@ -332,6 +332,7 @@ async function runTransfer(): Promise<void> {
     transferLines.value = [];
     await refresh();
     await catalog.refreshFromApi();
+    catalog.broadcastInvalidate();
   } catch (err) {
     shell.setError(err instanceof Error ? err.message : t('admin.loadFailed'));
   } finally {
@@ -347,6 +348,7 @@ async function receiveTransferRow(id: string): Promise<void> {
     toast.success(t('admin.transfer.received'));
     await refresh();
     await catalog.refreshFromApi();
+    catalog.broadcastInvalidate();
   } catch (err) {
     shell.setError(err instanceof Error ? err.message : t('admin.loadFailed'));
   } finally {
@@ -362,6 +364,7 @@ async function shipTransferRow(id: string): Promise<void> {
     toast.success(t('admin.transfer.shipped'));
     await refresh();
     await catalog.refreshFromApi();
+    catalog.broadcastInvalidate();
   } catch (err) {
     shell.setError(err instanceof Error ? err.message : t('admin.loadFailed'));
   } finally {
@@ -377,6 +380,7 @@ async function cancelTransferRow(id: string): Promise<void> {
     toast.success(t('admin.transfer.cancelled'));
     await refresh();
     await catalog.refreshFromApi();
+    catalog.broadcastInvalidate();
   } catch (err) {
     shell.setError(err instanceof Error ? err.message : t('admin.loadFailed'));
   } finally {
@@ -641,7 +645,7 @@ async function receivePo(order: PurchaseOrder): Promise<void> {
     });
     toast.success(t('admin.purchasing.receiveOk'));
     await refresh();
-    void catalog.refreshFromApi();
+    void catalog.refreshFromApi().then(() => catalog.broadcastInvalidate());
   } catch (err) {
     shell.setError(err instanceof Error ? err.message : t('admin.loadFailed'));
   } finally {
@@ -693,16 +697,16 @@ const busy = computed(() => shell.busy.value);
 
 <template>
   <div>
-    <p v-if="!visibleTabs.length" class="rounded-2xl bg-amber-50 p-4 text-amber-900">
+    <p v-if="!visibleTabs.length" class="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
       {{ t('admin.denied') }}
     </p>
     <template v-else>
-      <div class="mb-4 flex gap-2 overflow-x-auto pb-1">
+      <div class="mb-3 flex gap-1.5 overflow-x-auto pb-0.5">
         <button
           v-for="key in visibleTabs"
           :key="key"
           type="button"
-          class="touch-target shrink-0 rounded-2xl px-4 text-sm font-semibold"
+          class="admin-sub-tab shrink-0"
           :class="tab === key ? 'bg-teal-800 text-white' : 'bg-white text-slate-700 ring-1 ring-slate-200'"
           @click="tab = key"
         >
@@ -710,47 +714,47 @@ const busy = computed(() => shell.busy.value);
         </button>
       </div>
 
-      <UiPanel v-if="tab === 'inventory'" :title="t('admin.tabs.inventory')" :padded="false">
-        <div class="space-y-3 p-4">
+      <UiPanel v-if="tab === 'inventory'" dense :title="t('admin.tabs.inventory')" :padded="false">
+        <div class="space-y-2 p-3">
           <p class="text-sm text-slate-600">{{ t('admin.inventory.hint') }}</p>
           <div class="grid gap-2 sm:grid-cols-2">
             <label class="text-sm font-medium text-slate-600">
               {{ t('admin.inventory.store') }}
-              <select v-model="inventoryStoreId" class="mt-1 min-h-12 w-full rounded-xl border px-3" @change="onInventoryStoreChange">
+              <select v-model="inventoryStoreId" class="mt-1 min-h-10 w-full rounded-xl border px-3" @change="onInventoryStoreChange">
                 <option v-for="s in stores" :key="s.id" :value="s.id">{{ s.code }} · {{ s.name }}</option>
               </select>
             </label>
             <label class="text-sm font-medium text-slate-600">
               {{ t('admin.inventory.search') }}
-              <input v-model="inventoryQuery" class="mt-1 min-h-12 w-full rounded-xl border px-3" type="search" :placeholder="t('admin.inventory.searchPlaceholder')" />
+              <input v-model="inventoryQuery" class="mt-1 min-h-10 w-full rounded-xl border px-3" type="search" :placeholder="t('admin.inventory.searchPlaceholder')" />
             </label>
           </div>
-          <div class="overflow-x-auto rounded-2xl border border-slate-200">
+          <div class="overflow-x-auto rounded-xl border border-slate-200">
             <table class="min-w-full text-left text-sm">
               <thead class="border-b border-slate-200 bg-slate-50 text-slate-600">
                 <tr>
-                  <th class="px-3 py-2.5 font-medium">{{ t('admin.name') }}</th>
-                  <th class="px-3 py-2.5 font-medium">{{ t('admin.sku') }}</th>
-                  <th class="px-3 py-2.5 font-medium">{{ t('admin.inventory.onHand') }}</th>
-                  <th class="px-3 py-2.5 font-medium">{{ t('admin.inventory.storePrice') }}</th>
-                  <th class="px-3 py-2.5 font-medium">{{ t('admin.inventory.catalogPrice') }}</th>
-                  <th v-if="canInvWrite" class="px-3 py-2.5 font-medium" />
+                  <th class="px-2.5 py-1.5 font-medium">{{ t('admin.name') }}</th>
+                  <th class="px-2.5 py-1.5 font-medium">{{ t('admin.sku') }}</th>
+                  <th class="px-2.5 py-1.5 font-medium">{{ t('admin.inventory.onHand') }}</th>
+                  <th class="px-2.5 py-1.5 font-medium">{{ t('admin.inventory.storePrice') }}</th>
+                  <th class="px-2.5 py-1.5 font-medium">{{ t('admin.inventory.catalogPrice') }}</th>
+                  <th v-if="canInvWrite" class="px-2.5 py-1.5 font-medium" />
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="item in filteredInventory" :key="item.productId" class="border-b border-slate-100 last:border-0" :class="item.isActive ? '' : 'opacity-50'">
-                  <td class="px-3 py-2.5 font-medium">
+                  <td class="px-2.5 py-1.5 font-medium">
                     {{ item.name }}
                     <span v-if="item.storeUnitPriceInCents != null" class="ml-1 rounded bg-teal-50 px-1.5 py-0.5 text-[10px] font-semibold text-teal-800">
                       {{ t('admin.inventory.override') }}
                     </span>
                   </td>
-                  <td class="px-3 py-2.5 tabular-nums text-slate-600">{{ item.sku }}</td>
-                  <td class="px-3 py-2.5">
+                  <td class="px-2.5 py-1.5 tabular-nums text-slate-600">{{ item.sku }}</td>
+                  <td class="px-2.5 py-1.5">
                     <input v-if="canInvWrite" v-model.number="invQty[item.productId]" class="min-h-10 w-24 rounded-lg border px-2 tabular-nums" type="number" min="0" step="1" />
                     <span v-else class="tabular-nums">{{ item.onHandQty }}</span>
                   </td>
-                  <td class="px-3 py-2.5">
+                  <td class="px-2.5 py-1.5">
                     <div v-if="canInvWrite" class="flex flex-col gap-1">
                       <MoneyIdrInput v-model="invPrice[item.productId]!" :disabled="invClearPrice[item.productId]" />
                       <label v-if="item.storeUnitPriceInCents != null" class="inline-flex items-center gap-1 text-xs text-slate-500">
@@ -760,15 +764,15 @@ const busy = computed(() => shell.busy.value);
                     </div>
                     <span v-else class="tabular-nums">{{ formatIdrFromCents(item.effectiveUnitPriceInCents) }}</span>
                   </td>
-                  <td class="px-3 py-2.5 tabular-nums text-slate-500">{{ formatIdrFromCents(item.catalogUnitPriceInCents) }}</td>
-                  <td v-if="canInvWrite" class="px-3 py-2.5">
-                    <button type="button" class="rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40" :disabled="busy" @click="saveInventoryRow(item)">
+                  <td class="px-2.5 py-1.5 tabular-nums text-slate-500">{{ formatIdrFromCents(item.catalogUnitPriceInCents) }}</td>
+                  <td v-if="canInvWrite" class="px-2.5 py-1.5">
+                    <button type="button" class="min-h-8 rounded-lg bg-slate-900 px-2.5 text-xs font-semibold text-white disabled:opacity-40" :disabled="busy" @click="saveInventoryRow(item)">
                       {{ t('admin.save') }}
                     </button>
                   </td>
                 </tr>
                 <tr v-if="!filteredInventory.length">
-                  <td class="px-3 py-8 text-slate-500" :colspan="canInvWrite ? 6 : 5">{{ t('admin.inventory.empty') }}</td>
+                  <td class="px-3 py-4 text-slate-500" :colspan="canInvWrite ? 6 : 5">{{ t('admin.inventory.empty') }}</td>
                 </tr>
               </tbody>
             </table>
@@ -776,35 +780,35 @@ const busy = computed(() => shell.busy.value);
         </div>
       </UiPanel>
 
-      <UiPanel v-else-if="tab === 'transfer'" :title="t('admin.tabs.transfer')">
-        <div v-if="canInvWrite" class="mb-4 grid gap-2 sm:grid-cols-2">
+      <UiPanel v-else-if="tab === 'transfer'" dense :title="t('admin.tabs.transfer')">
+        <div v-if="canInvWrite" class="mb-2 grid gap-2 sm:grid-cols-2">
           <label class="text-sm">
             {{ t('admin.transfer.from') }}
-            <select v-model="transferFrom" class="mt-1 min-h-12 w-full rounded-xl border px-3">
+            <select v-model="transferFrom" class="mt-1 min-h-10 w-full rounded-xl border px-3">
               <option v-for="s in stores" :key="s.id" :value="s.id">{{ s.code }} · {{ s.name }}</option>
             </select>
           </label>
           <label class="text-sm">
             {{ t('admin.transfer.to') }}
-            <select v-model="transferTo" class="mt-1 min-h-12 w-full rounded-xl border px-3">
+            <select v-model="transferTo" class="mt-1 min-h-10 w-full rounded-xl border px-3">
               <option v-for="s in stores" :key="s.id" :value="s.id">{{ s.code }} · {{ s.name }}</option>
             </select>
           </label>
           <label class="text-sm sm:col-span-2">
             {{ t('admin.transfer.note') }}
-            <input v-model="transferNote" class="mt-1 min-h-12 w-full rounded-xl border px-3" type="text" />
+            <input v-model="transferNote" class="mt-1 min-h-10 w-full rounded-xl border px-3" type="text" />
           </label>
           <label class="text-sm sm:col-span-2">
             {{ t('admin.transfer.product') }}
-            <select v-model="transferLineProductId" class="mt-1 min-h-12 w-full rounded-xl border px-3">
+            <select v-model="transferLineProductId" class="mt-1 min-h-10 w-full rounded-xl border px-3">
               <option v-for="p in products" :key="p.id" :value="p.id">{{ p.name }} ({{ p.sku }})</option>
             </select>
           </label>
           <label class="text-sm">
             {{ t('admin.transfer.qty') }}
-            <input v-model.number="transferLineQty" class="mt-1 min-h-12 w-full rounded-xl border px-3 tabular-nums" type="number" min="1" step="1" />
+            <input v-model.number="transferLineQty" class="mt-1 min-h-10 w-full rounded-xl border px-3 tabular-nums" type="number" min="1" step="1" />
           </label>
-          <button type="button" class="touch-target self-end rounded-2xl bg-white text-sm font-semibold ring-1 ring-slate-300" @click="addTransferLine">
+          <button type="button" class="min-h-9 self-end rounded-lg bg-white text-sm font-semibold ring-1 ring-slate-300" @click="addTransferLine">
             {{ t('admin.transfer.addLine') }}
           </button>
           <ul v-if="transferLines.length" class="sm:col-span-2 space-y-1 text-sm">
@@ -813,12 +817,12 @@ const busy = computed(() => shell.busy.value);
               <button type="button" class="text-red-600" @click="removeTransferLine(idx)">×</button>
             </li>
           </ul>
-          <button type="button" class="touch-target rounded-2xl bg-slate-900 text-sm font-semibold text-white sm:col-span-2" :disabled="busy || !transferLines.length" @click="runTransfer">
+          <button type="button" class="min-h-10 rounded-xl bg-slate-900 text-sm font-semibold text-white sm:col-span-2" :disabled="busy || !transferLines.length" @click="runTransfer">
             {{ t('admin.transfer.submit') }}
           </button>
         </div>
-        <ul class="space-y-2 text-sm">
-          <li v-for="x in transfers" :key="x.id" class="rounded-2xl bg-slate-50 px-4 py-3">
+        <ul class="divide-y divide-slate-100 overflow-hidden rounded-xl text-sm ring-1 ring-slate-200">
+          <li v-for="x in transfers" :key="x.id" class="bg-white px-3 py-2">
             <div class="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <span
@@ -850,29 +854,29 @@ const busy = computed(() => shell.busy.value);
         </ul>
       </UiPanel>
 
-      <UiPanel v-else-if="tab === 'stockOpname'" :title="t('admin.tabs.stockOpname')">
-        <p class="mb-4 text-sm text-slate-600">{{ t('admin.stockOpname.hint') }}</p>
-        <div class="mb-4 flex flex-wrap items-end gap-3">
+      <UiPanel v-else-if="tab === 'stockOpname'" dense :title="t('admin.tabs.stockOpname')">
+        <p class="mb-2 text-sm text-slate-600">{{ t('admin.stockOpname.hint') }}</p>
+        <div class="mb-2 flex flex-wrap items-end gap-2">
           <label class="text-sm font-medium text-slate-600">
             {{ t('admin.inventory.store') }}
             <select
               v-model="stockOpnameStoreId"
-              class="mt-1 min-h-11 rounded-xl border px-3"
+              class="mt-1 min-h-10 rounded-xl border px-3"
               @change="activeStockCount = null; loadStockCountsAdmin(stockOpnameStoreId)"
             >
               <option v-for="s in stores" :key="s.id" :value="s.id">{{ s.code }} — {{ s.name }}</option>
             </select>
           </label>
-          <button v-if="canInvWrite" type="button" class="touch-target rounded-xl bg-emerald-600 px-4 font-semibold text-white" :disabled="busy" @click="startStockOpname">
+          <button v-if="canInvWrite" type="button" class="min-h-10 rounded-xl bg-emerald-600 px-4 font-semibold text-white" :disabled="busy" @click="startStockOpname">
             {{ t('admin.stockOpname.start') }}
           </button>
-          <button v-if="activeStockCount" type="button" class="touch-target rounded-xl bg-slate-200 px-4 font-semibold" @click="activeStockCount = null">
+          <button v-if="activeStockCount" type="button" class="min-h-10 rounded-xl bg-slate-200 px-4 font-semibold" @click="activeStockCount = null">
             {{ t('admin.stockOpname.backToList') }}
           </button>
         </div>
-        <div v-if="activeStockCount" class="space-y-3">
+        <div v-if="activeStockCount" class="space-y-2">
           <p class="text-sm font-semibold text-slate-800">{{ activeStockCount.code }} · {{ activeStockCount.status }}</p>
-          <div class="max-h-[28rem] overflow-auto rounded-2xl border border-slate-200">
+          <div class="max-h-[28rem] overflow-auto rounded-xl border border-slate-200">
             <table class="min-w-full text-left text-sm">
               <thead class="sticky top-0 border-b bg-slate-50 text-slate-600">
                 <tr>
@@ -904,12 +908,12 @@ const busy = computed(() => shell.busy.value);
             </table>
           </div>
           <div v-if="canInvWrite && activeStockCount.status === 'DRAFT'" class="flex gap-2">
-            <button type="button" class="touch-target rounded-xl bg-emerald-600 px-4 font-semibold text-white" :disabled="busy" @click="finishStockOpname">{{ t('admin.stockOpname.complete') }}</button>
-            <button type="button" class="touch-target rounded-xl bg-red-100 px-4 font-semibold text-red-900" :disabled="busy" @click="cancelStockOpnameSession">{{ t('admin.stockOpname.cancel') }}</button>
+            <button type="button" class="min-h-10 rounded-xl bg-emerald-600 px-4 font-semibold text-white" :disabled="busy" @click="finishStockOpname">{{ t('admin.stockOpname.complete') }}</button>
+            <button type="button" class="min-h-10 rounded-xl bg-red-100 px-4 font-semibold text-red-900" :disabled="busy" @click="cancelStockOpnameSession">{{ t('admin.stockOpname.cancel') }}</button>
           </div>
         </div>
-        <ul v-else class="space-y-2">
-          <li v-for="sc in stockCounts" :key="sc.id" class="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-slate-50 px-4 py-3">
+        <ul v-else class="divide-y divide-slate-100 overflow-hidden rounded-xl ring-1 ring-slate-200">
+          <li v-for="sc in stockCounts" :key="sc.id" class="flex flex-wrap items-center justify-between gap-2 bg-white px-3 py-2">
             <div>
               <strong>{{ sc.code }}</strong> · {{ sc.store.code }} · {{ sc.status }} · {{ sc._count?.lines ?? sc.lines?.length ?? 0 }} SKU
             </div>
@@ -919,28 +923,28 @@ const busy = computed(() => shell.busy.value);
         </ul>
       </UiPanel>
 
-      <UiPanel v-else-if="tab === 'suppliers'" :title="t('admin.tabs.suppliers')">
-        <p class="mb-4 text-sm text-slate-600">{{ t('admin.suppliers.hint') }}</p>
-        <div v-if="canPurchase" class="mb-4 grid gap-3 rounded-xl bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-3">
-          <input v-model="newSupplier.code" class="min-h-12 rounded-xl border px-3" :placeholder="t('admin.suppliers.code')" />
-          <input v-model="newSupplier.name" class="min-h-12 rounded-xl border px-3" :placeholder="t('admin.suppliers.name')" />
-          <input v-model="newSupplier.phone" class="min-h-12 rounded-xl border px-3" :placeholder="t('admin.suppliers.phone')" />
-          <input v-model="newSupplier.email" class="min-h-12 rounded-xl border px-3" :placeholder="t('admin.suppliers.email')" />
-          <input v-model="newSupplier.address" class="min-h-12 rounded-xl border px-3 sm:col-span-2" :placeholder="t('admin.suppliers.address')" />
-          <button class="touch-target rounded-xl bg-emerald-600 font-semibold text-white" type="button" :disabled="busy" @click="addSupplier">{{ t('admin.suppliers.add') }}</button>
+      <UiPanel v-else-if="tab === 'suppliers'" dense :title="t('admin.tabs.suppliers')">
+        <p class="mb-2 text-sm text-slate-600">{{ t('admin.suppliers.hint') }}</p>
+        <div v-if="canPurchase" class="mb-2 grid gap-2 rounded-xl bg-slate-50 p-2.5 sm:grid-cols-2 lg:grid-cols-3">
+          <input v-model="newSupplier.code" class="min-h-10 rounded-xl border px-3" :placeholder="t('admin.suppliers.code')" />
+          <input v-model="newSupplier.name" class="min-h-10 rounded-xl border px-3" :placeholder="t('admin.suppliers.name')" />
+          <input v-model="newSupplier.phone" class="min-h-10 rounded-xl border px-3" :placeholder="t('admin.suppliers.phone')" />
+          <input v-model="newSupplier.email" class="min-h-10 rounded-xl border px-3" :placeholder="t('admin.suppliers.email')" />
+          <input v-model="newSupplier.address" class="min-h-10 rounded-xl border px-3 sm:col-span-2" :placeholder="t('admin.suppliers.address')" />
+          <button class="min-h-10 rounded-xl bg-emerald-600 font-semibold text-white" type="button" :disabled="busy" @click="addSupplier">{{ t('admin.suppliers.add') }}</button>
         </div>
-        <ul class="space-y-3">
-          <li v-for="s in suppliers" :key="s.id" class="rounded-2xl bg-slate-50 px-4 py-3">
+        <ul class="divide-y divide-slate-100 overflow-hidden rounded-xl ring-1 ring-slate-200">
+          <li v-for="s in suppliers" :key="s.id" class="bg-white px-3 py-2">
             <div class="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <strong>{{ s.code }}</strong> · {{ s.name }}
                 <span class="text-slate-500">· {{ s.isActive ? t('admin.active') : t('admin.inactive') }}</span>
               </div>
-              <button v-if="canPurchase" type="button" class="touch-target rounded-xl bg-white px-3 text-sm font-semibold ring-1 ring-slate-200" :disabled="busy" @click="toggleSupplierActive(s)">
+              <button v-if="canPurchase" type="button" class="min-h-10 rounded-xl bg-white px-3 text-sm font-semibold ring-1 ring-slate-200" :disabled="busy" @click="toggleSupplierActive(s)">
                 {{ s.isActive ? t('admin.suppliers.deactivate') : t('admin.suppliers.activate') }}
               </button>
             </div>
-            <div v-if="canPurchase && supplierDraft[s.id]" class="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <div v-if="canPurchase && supplierDraft[s.id]" class="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               <input v-model="supplierDraft[s.id]!.name" class="min-h-10 rounded-lg border px-2" :placeholder="t('admin.suppliers.name')" />
               <input v-model="supplierDraft[s.id]!.phone" class="min-h-10 rounded-lg border px-2" :placeholder="t('admin.suppliers.phone')" />
               <input v-model="supplierDraft[s.id]!.email" class="min-h-10 rounded-lg border px-2" :placeholder="t('admin.suppliers.email')" />
@@ -952,43 +956,43 @@ const busy = computed(() => shell.busy.value);
         </ul>
       </UiPanel>
 
-      <UiPanel v-else-if="tab === 'purchasing'" :title="t('admin.tabs.purchasing')">
-        <p class="mb-4 text-sm text-slate-600">{{ t('admin.purchasing.hint') }}</p>
-        <div v-if="canPurchase" class="mb-6 space-y-3 rounded-xl bg-slate-50 p-4">
-          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <UiPanel v-else-if="tab === 'purchasing'" dense :title="t('admin.tabs.purchasing')">
+        <p class="mb-2 text-sm text-slate-600">{{ t('admin.purchasing.hint') }}</p>
+        <div v-if="canPurchase" class="mb-3 space-y-2 rounded-xl bg-slate-50 p-2.5">
+          <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <label class="text-sm font-medium text-slate-700">
               {{ t('admin.purchasing.supplier') }}
-              <select v-model="poSupplierId" class="mt-1 min-h-12 w-full rounded-xl border px-3">
+              <select v-model="poSupplierId" class="mt-1 min-h-10 w-full rounded-xl border px-3">
                 <option v-for="s in suppliers.filter((x) => x.isActive)" :key="s.id" :value="s.id">{{ s.code }} — {{ s.name }}</option>
               </select>
             </label>
             <label class="text-sm font-medium text-slate-700">
               {{ t('admin.purchasing.store') }}
-              <select v-model="poStoreId" class="mt-1 min-h-12 w-full rounded-xl border px-3">
+              <select v-model="poStoreId" class="mt-1 min-h-10 w-full rounded-xl border px-3">
                 <option v-for="s in stores" :key="s.id" :value="s.id">{{ s.code }} — {{ s.name }}</option>
               </select>
             </label>
             <label class="text-sm font-medium text-slate-700 sm:col-span-2">
               {{ t('admin.purchasing.note') }}
-              <input v-model="poNote" class="mt-1 min-h-12 w-full rounded-xl border px-3" type="text" />
+              <input v-model="poNote" class="mt-1 min-h-10 w-full rounded-xl border px-3" type="text" />
             </label>
           </div>
-          <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
             <label class="text-sm font-medium text-slate-700 lg:col-span-2">
               {{ t('admin.purchasing.product') }}
-              <select v-model="poProductId" class="mt-1 min-h-12 w-full rounded-xl border px-3">
+              <select v-model="poProductId" class="mt-1 min-h-10 w-full rounded-xl border px-3">
                 <option v-for="p in products" :key="p.id" :value="p.id">{{ p.sku }} — {{ p.name }}</option>
               </select>
             </label>
             <label class="text-sm font-medium text-slate-700">
               {{ t('admin.purchasing.qty') }}
-              <input v-model.number="poQty" class="mt-1 min-h-12 w-full rounded-xl border px-3" type="number" step="1" min="1" />
+              <input v-model.number="poQty" class="mt-1 min-h-10 w-full rounded-xl border px-3" type="number" step="1" min="1" />
             </label>
             <label class="text-sm font-medium text-slate-700">
               {{ t('admin.purchasing.unitCost') }}
               <MoneyIdrInput v-model="poUnitCost" />
             </label>
-            <button type="button" class="touch-target self-end rounded-xl bg-slate-900 font-semibold text-white" @click="addPoLine">{{ t('admin.purchasing.addLine') }}</button>
+            <button type="button" class="min-h-10 self-end rounded-xl bg-slate-900 font-semibold text-white" @click="addPoLine">{{ t('admin.purchasing.addLine') }}</button>
           </div>
           <ul v-if="poLines.length" class="space-y-1 text-sm">
             <li v-for="(line, idx) in poLines" :key="`${line.productId}-${idx}`" class="flex items-center justify-between rounded-lg bg-white px-3 py-2">
@@ -997,24 +1001,24 @@ const busy = computed(() => shell.busy.value);
             </li>
           </ul>
           <div class="flex flex-wrap gap-2">
-            <button type="button" class="touch-target rounded-xl bg-white px-4 font-semibold ring-1 ring-slate-300" :disabled="busy || !poLines.length" @click="submitPurchaseOrder(false)">{{ t('admin.purchasing.createDraft') }}</button>
-            <button type="button" class="touch-target rounded-xl bg-emerald-600 px-4 font-semibold text-white" :disabled="busy || !poLines.length" @click="submitPurchaseOrder(true)">{{ t('admin.purchasing.createOrdered') }}</button>
+            <button type="button" class="min-h-10 rounded-xl bg-white px-4 font-semibold ring-1 ring-slate-300" :disabled="busy || !poLines.length" @click="submitPurchaseOrder(false)">{{ t('admin.purchasing.createDraft') }}</button>
+            <button type="button" class="min-h-10 rounded-xl bg-emerald-600 px-4 font-semibold text-white" :disabled="busy || !poLines.length" @click="submitPurchaseOrder(true)">{{ t('admin.purchasing.createOrdered') }}</button>
           </div>
         </div>
-        <ul class="space-y-4">
-          <li v-for="o in purchaseOrders" :key="o.id" class="rounded-2xl border border-slate-200 bg-white p-4">
+        <ul class="divide-y divide-slate-100 overflow-hidden rounded-xl ring-1 ring-slate-200">
+          <li v-for="o in purchaseOrders" :key="o.id" class="bg-white px-3 py-2">
             <div class="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <strong>{{ o.code }}</strong> · {{ t(`admin.purchasing.status.${o.status}`) }} · {{ o.supplier.code }} → {{ o.store.code }}
                 <p class="text-sm text-slate-600">{{ t('admin.purchasing.subtotal') }}: {{ formatIdrFromCents(o.subtotalInCents) }}</p>
               </div>
               <div v-if="canPurchase" class="flex flex-wrap gap-2">
-                <button v-if="o.status === 'DRAFT'" type="button" class="touch-target rounded-xl bg-slate-900 px-3 text-sm font-semibold text-white" :disabled="busy" @click="confirmPo(o.id)">{{ t('admin.purchasing.confirm') }}</button>
-                <button v-if="o.status === 'DRAFT' || o.status === 'ORDERED'" type="button" class="touch-target rounded-xl bg-white px-3 text-sm font-semibold text-red-700 ring-1 ring-red-200" :disabled="busy" @click="cancelPo(o.id)">{{ t('admin.purchasing.cancel') }}</button>
+                <button v-if="o.status === 'DRAFT'" type="button" class="min-h-10 rounded-xl bg-slate-900 px-3 text-sm font-semibold text-white" :disabled="busy" @click="confirmPo(o.id)">{{ t('admin.purchasing.confirm') }}</button>
+                <button v-if="o.status === 'DRAFT' || o.status === 'ORDERED'" type="button" class="min-h-10 rounded-xl bg-white px-3 text-sm font-semibold text-red-700 ring-1 ring-red-200" :disabled="busy" @click="cancelPo(o.id)">{{ t('admin.purchasing.cancel') }}</button>
               </div>
             </div>
-            <ul class="mt-3 space-y-2 text-sm">
-              <li v-for="line in o.lines" :key="line.id" class="grid gap-2 rounded-xl bg-slate-50 px-3 py-2 sm:grid-cols-[1fr_auto]">
+            <ul class="mt-2 space-y-1 text-sm">
+              <li v-for="line in o.lines" :key="line.id" class="grid gap-2 rounded-lg bg-slate-50 px-2.5 py-1.5 sm:grid-cols-[1fr_auto]">
                 <span>
                   {{ line.product.name }} · {{ line.qtyReceived }}/{{ line.qtyOrdered }} · {{ formatIdrFromCents(line.unitCostInCents) }}
                   <span class="text-slate-500">({{ t('admin.purchasing.remaining') }} {{ line.qtyOrdered - line.qtyReceived }})</span>
@@ -1029,25 +1033,25 @@ const busy = computed(() => shell.busy.value);
                 />
               </li>
             </ul>
-            <div v-if="canPurchase && (o.status === 'ORDERED' || o.status === 'PARTIAL')" class="mt-3 flex flex-wrap items-end gap-3">
+            <div v-if="canPurchase && (o.status === 'ORDERED' || o.status === 'PARTIAL')" class="mt-2 flex flex-wrap items-end gap-2">
               <label class="text-sm font-medium text-slate-700">
                 {{ t('admin.purchasing.store') }}
-                <select v-model="receiveStoreId[o.id]" class="mt-1 min-h-12 rounded-xl border px-3">
+                <select v-model="receiveStoreId[o.id]" class="mt-1 min-h-10 rounded-xl border px-3">
                   <option v-for="s in stores" :key="s.id" :value="s.id">{{ s.code }} — {{ s.name }}</option>
                 </select>
               </label>
-              <button type="button" class="touch-target rounded-xl bg-emerald-600 px-4 font-semibold text-white" :disabled="busy" @click="receivePo(o)">{{ t('admin.purchasing.receive') }}</button>
+              <button type="button" class="min-h-10 rounded-xl bg-emerald-600 px-4 font-semibold text-white" :disabled="busy" @click="receivePo(o)">{{ t('admin.purchasing.receive') }}</button>
             </div>
           </li>
           <li v-if="!purchaseOrders.length" class="text-slate-500">{{ t('admin.purchasing.empty') }}</li>
         </ul>
       </UiPanel>
 
-      <UiPanel v-else-if="tab === 'recipes'" :title="t('admin.tabs.recipes')">
-        <p class="mb-4 text-sm text-slate-600">{{ t('admin.recipes.hint') }}</p>
+      <UiPanel v-else-if="tab === 'recipes'" dense :title="t('admin.tabs.recipes')">
+        <p class="mb-2 text-sm text-slate-600">{{ t('admin.recipes.hint') }}</p>
         <label class="mb-3 block text-sm font-medium text-slate-700">
           {{ t('admin.recipes.menuProduct') }}
-          <select v-model="recipeProductId" class="mt-1 min-h-11 w-full max-w-md rounded-xl border px-3" @change="loadRecipeEditor">
+          <select v-model="recipeProductId" class="mt-1 min-h-10 w-full max-w-md rounded-xl border px-3" @change="loadRecipeEditor">
             <option v-for="p in products.filter((x) => x.productType !== 'INGREDIENT')" :key="p.id" :value="p.id">{{ p.sku }} — {{ p.name }}</option>
           </select>
         </label>
@@ -1055,12 +1059,12 @@ const busy = computed(() => shell.busy.value);
           {{ t('admin.recipes.hppPreview') }}: {{ formatIdrFromCents(recipeCogsPreview) }}
         </p>
         <div v-if="canInvWrite" class="space-y-2">
-          <div v-for="(line, idx) in recipeLines" :key="idx" class="grid gap-2 rounded-xl bg-slate-50 p-3 sm:grid-cols-4">
-            <select v-model="line.ingredientProductId" class="min-h-11 rounded-xl border px-3">
+          <div v-for="(line, idx) in recipeLines" :key="idx" class="grid gap-2 rounded-lg bg-slate-50 p-2 sm:grid-cols-4">
+            <select v-model="line.ingredientProductId" class="min-h-10 rounded-xl border px-3">
               <option value="">{{ t('admin.recipes.ingredient') }}</option>
               <option v-for="p in products.filter((x) => x.productType === 'INGREDIENT' || x.sku.startsWith('ING-'))" :key="p.id" :value="p.id">{{ p.sku }} — {{ p.name }}</option>
             </select>
-            <input v-model.number="line.qty" type="number" min="1" class="min-h-11 rounded-xl border px-3" :placeholder="t('admin.recipes.qty')" />
+            <input v-model.number="line.qty" type="number" min="1" class="min-h-10 rounded-xl border px-3" :placeholder="t('admin.recipes.qty')" />
             <MoneyIdrInput v-model="line.unitCostInCents" :placeholder="t('admin.recipes.unitCost')" />
           </div>
           <div class="flex gap-2">
@@ -1068,8 +1072,8 @@ const busy = computed(() => shell.busy.value);
             <button type="button" class="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white" :disabled="busy" @click="saveRecipe">{{ t('admin.save') }}</button>
           </div>
         </div>
-        <ul class="mt-6 space-y-2 text-sm">
-          <li v-for="r in recipes" :key="r.id" class="rounded-xl bg-white px-3 py-2 ring-1 ring-slate-100">
+        <ul class="mt-3 divide-y divide-slate-100 overflow-hidden rounded-xl text-sm ring-1 ring-slate-200">
+          <li v-for="r in recipes" :key="r.id" class="bg-white px-3 py-1.5">
             <strong>{{ r.product.sku }}</strong> · {{ r.lines.length }} {{ t('admin.recipes.ingredients') }}
           </li>
         </ul>

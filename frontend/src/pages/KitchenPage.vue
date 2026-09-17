@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import PageHeader from '../components/PageHeader.vue';
 import { useI18n } from '../i18n';
+import { playKitchenChime, unlockKitchenChime } from '../lib/kitchen-chime';
 import {
   bumpKitchenLine,
   fetchKitchenStations,
@@ -11,11 +12,13 @@ import {
 } from '../services/kitchen-api.service';
 import { useAuthStore } from '../stores/auth.store';
 import { useCatalogStore } from '../stores/catalog.store';
+import { useKitchenNotifyStore } from '../stores/kitchen-notify.store';
 import { useToastStore } from '../stores/toast.store';
 
 const { t } = useI18n();
 const auth = useAuthStore();
 const catalog = useCatalogStore();
+const kitchenNotify = useKitchenNotifyStore();
 const toast = useToastStore();
 
 const stations = ref<KitchenStation[]>([]);
@@ -26,6 +29,11 @@ const busy = ref(false);
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
 const storeId = computed(() => catalog.session?.storeId ?? '');
+const storeLabel = computed(() => {
+  const s = catalog.session;
+  if (!s) return '';
+  return s.storeName || s.storeId;
+});
 
 const filteredTickets = computed(() => {
   if (stationId.value === 'all') return tickets.value;
@@ -34,7 +42,7 @@ const filteredTickets = computed(() => {
       ...ticket,
       lines: ticket.lines.filter((l) => l.station.id === stationId.value),
     }))
-    .filter((t) => t.lines.length > 0);
+    .filter((tk) => tk.lines.length > 0);
 });
 
 async function reload(): Promise<void> {
@@ -45,6 +53,7 @@ async function reload(): Promise<void> {
       stationId.value === 'all' ? undefined : stationId.value,
     );
     error.value = null;
+    kitchenNotify.unseenCount = 0;
   } catch (e) {
     error.value = e instanceof Error ? e.message : t('kitchen.loadFailed');
   }
@@ -56,6 +65,19 @@ async function loadStations(): Promise<void> {
     stations.value = (await fetchKitchenStations(storeId.value)).filter((s) => s.isActive);
   } catch (e) {
     error.value = e instanceof Error ? e.message : t('kitchen.loadFailed');
+  }
+}
+
+function pickDefaultStation(): void {
+  stationId.value = 'all';
+  if (stations.value.length === 1) {
+    stationId.value = stations.value[0]!.id;
+  } else if (
+    auth.staff?.role === 'KITCHEN' &&
+    auth.staff.kitchenStationIds.length === 1 &&
+    stations.value.some((s) => s.id === auth.staff!.kitchenStationIds[0])
+  ) {
+    stationId.value = auth.staff.kitchenStationIds[0]!;
   }
 }
 
@@ -78,32 +100,62 @@ function nextStatus(current: string): 'PREPARING' | 'READY' | 'DONE' | null {
   return null;
 }
 
+async function toggleSound(): Promise<void> {
+  await unlockKitchenChime();
+  kitchenNotify.setSoundEnabled(!kitchenNotify.soundEnabled);
+  if (kitchenNotify.soundEnabled) {
+    playKitchenChime();
+  }
+}
+
+async function bootForStore(): Promise<void> {
+  tickets.value = [];
+  stations.value = [];
+  await loadStations();
+  pickDefaultStation();
+  await reload();
+}
+
 onMounted(async () => {
+  kitchenNotify.markViewing(true);
   if (!catalog.session) {
     await catalog.init();
   }
-  await loadStations();
-  if (stations.value.length === 1) {
-    stationId.value = stations.value[0]!.id;
-  } else if (
-    auth.staff?.role === 'KITCHEN' &&
-    auth.staff.kitchenStationIds.length === 1 &&
-    stations.value.some((s) => s.id === auth.staff!.kitchenStationIds[0])
-  ) {
-    stationId.value = auth.staff.kitchenStationIds[0]!;
-  }
-  await reload();
-  pollTimer = setInterval(() => void reload(), 8000);
+  await bootForStore();
+  pollTimer = setInterval(() => void reload(), 5000);
+});
+
+watch(storeId, async (next, prev) => {
+  if (!next || next === prev) return;
+  await bootForStore();
 });
 
 onUnmounted(() => {
+  kitchenNotify.markViewing(false);
   if (pollTimer) clearInterval(pollTimer);
 });
 </script>
 
 <template>
   <div class="mx-auto max-w-7xl p-4">
-    <PageHeader :title="t('kitchen.title')" :subtitle="t('kitchen.subtitle')" />
+    <PageHeader compact :title="t('kitchen.title')" :subtitle="t('kitchen.subtitle')">
+      <template #actions>
+        <span
+          v-if="storeLabel"
+          class="hidden rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-700 sm:inline"
+        >
+          {{ storeLabel }}
+        </span>
+        <button
+          type="button"
+          class="min-h-9 rounded-lg px-3 text-sm font-semibold ring-1 ring-slate-200"
+          :class="kitchenNotify.soundEnabled ? 'bg-orange-50 text-orange-900' : 'bg-white text-slate-600'"
+          @click="toggleSound"
+        >
+          {{ kitchenNotify.soundEnabled ? t('kitchen.soundOn') : t('kitchen.soundOff') }}
+        </button>
+      </template>
+    </PageHeader>
 
     <div class="mb-4 flex flex-wrap items-center gap-2">
       <button
@@ -197,7 +249,7 @@ onUnmounted(() => {
     </div>
 
     <p class="mt-4 text-xs text-slate-400">
-      {{ auth.staff?.displayName }} · {{ t('kitchen.autoRefresh') }}
+      {{ auth.staff?.displayName }} · {{ storeLabel }} · {{ t('kitchen.autoRefresh') }}
     </p>
   </div>
 </template>

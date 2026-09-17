@@ -65,15 +65,16 @@ function reloadActive(): void {
 </script>
 
 <template>
-  <main class="mx-auto max-w-6xl px-3 py-5 sm:px-4 sm:py-8">
+  <main class="mx-auto max-w-6xl px-3 py-3 sm:px-4 sm:py-4">
     <PageHeader
+      compact
       :eyebrow="t('admin.eyebrow')"
       :title="t('admin.title')"
       :subtitle="t('admin.subtitle')"
     >
       <template #actions>
         <button
-          class="touch-target rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white"
+          class="min-h-10 rounded-xl bg-slate-900 px-3 text-sm font-semibold text-white disabled:opacity-40"
           type="button"
           :disabled="busy"
           @click="reloadActive"
@@ -83,15 +84,15 @@ function reloadActive(): void {
       </template>
     </PageHeader>
 
-    <p v-if="error" class="mb-4 rounded-2xl bg-red-50 p-3 text-red-800">{{ error }}</p>
+    <p v-if="error" class="mb-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-800">{{ error }}</p>
 
     <template v-if="auth.has('admin.access')">
-      <nav class="mb-5 flex gap-2 overflow-x-auto pb-1" aria-label="Admin hubs">
+      <nav class="mb-3 flex gap-1.5 overflow-x-auto pb-0.5" aria-label="Admin hubs">
         <RouterLink
           v-for="hub in hubs"
           :key="hub.key"
           :to="hub.to"
-          class="touch-target shrink-0 rounded-2xl px-4 text-sm font-semibold"
+          class="admin-hub-tab shrink-0"
           :class="
             activeHub === hub.key
               ? 'bg-slate-900 text-white'
@@ -105,6 +106,6 @@ function reloadActive(): void {
       <RouterView />
     </template>
 
-    <p v-else class="rounded-2xl bg-amber-50 p-4 text-amber-900">{{ t('admin.denied') }}</p>
+    <p v-else class="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{{ t('admin.denied') }}</p>
   </main>
 </template>

@@ -25,6 +25,21 @@ export const useCatalogStore = defineStore('catalog', () => {
   const online = ref(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const loadError = ref<string | null>(null);
 
+  let lastRefreshAt = 0;
+  let liveRefreshBound = false;
+  let liveRefreshTimer: ReturnType<typeof setInterval> | null = null;
+  let catalogChannel: BroadcastChannel | null = null;
+
+  const CATALOG_CHANNEL = 'bonpos.catalog';
+
+  function getCatalogChannel(): BroadcastChannel | null {
+    if (typeof BroadcastChannel === 'undefined') return null;
+    if (!catalogChannel) {
+      catalogChannel = new BroadcastChannel(CATALOG_CHANNEL);
+    }
+    return catalogChannel;
+  }
+
   const productsByCategory = computed(() => {
     const groups = new Map<string, CachedProduct[]>();
     for (const product of products.value) {
@@ -202,7 +217,14 @@ export const useCatalogStore = defineStore('catalog', () => {
     categories.value = plainCategories;
     setProducts(plainProducts);
     localStorage.setItem('bonpos.storeId', nextSession.storeId);
+    lastRefreshAt = Date.now();
     void pruneLocalPosState();
+    // Notify other tabs (admin → kasir) to pull fresh prices.
+    try {
+      getCatalogChannel()?.postMessage({ type: 'refreshed', at: lastRefreshAt });
+    } catch {
+      /* BroadcastChannel unsupported */
+    }
   }
 
   async function switchStore(storeId: string): Promise<void> {
@@ -231,6 +253,80 @@ export const useCatalogStore = defineStore('catalog', () => {
       if (!products.value.length) {
         throw error;
       }
+    }
+  }
+
+  /** Soft refresh: skip if a pull just finished (avoids hammering bootstrap). */
+  async function softRefreshFromApi(minIntervalMs = 5_000): Promise<void> {
+    if (!navigator.onLine) return;
+    if (Date.now() - lastRefreshAt < minIntervalMs) return;
+    try {
+      await refreshFromApi();
+    } catch (error) {
+      console.warn('Catalog soft refresh failed', error);
+    }
+  }
+
+  /**
+   * Keep POS prices fresh while the cashier screen stays open:
+   * - tab focus / visibility
+   * - back online
+   * - periodic poll (60s)
+   * - BroadcastChannel from admin saves in another tab
+   */
+  function bindLiveRefresh(): void {
+    if (typeof window === 'undefined' || liveRefreshBound) return;
+    liveRefreshBound = true;
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        void softRefreshFromApi(8_000);
+      }
+    };
+    const onFocus = () => void softRefreshFromApi(8_000);
+    const onOnline = () => {
+      online.value = true;
+      void softRefreshFromApi(0);
+    };
+    const onOffline = () => {
+      online.value = false;
+    };
+
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+
+    liveRefreshTimer = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void softRefreshFromApi(30_000);
+      }
+    }, 60_000);
+
+    try {
+      const ch = getCatalogChannel();
+      ch?.addEventListener('message', (ev: MessageEvent) => {
+        const data = ev.data as { type?: string } | null;
+        if (data?.type === 'invalidate' || data?.type === 'refreshed') {
+          // Other tab saved catalog — pull immediately (skip self echo via min interval after own refresh).
+          if (data.type === 'invalidate') {
+            void softRefreshFromApi(0);
+          } else {
+            void softRefreshFromApi(2_000);
+          }
+        }
+      });
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /** Call after admin catalog/inventory price saves so other POS tabs refresh. */
+  function broadcastInvalidate(): void {
+    try {
+      getCatalogChannel()?.postMessage({ type: 'invalidate', at: Date.now() });
+    } catch {
+      /* ignore */
     }
   }
 
@@ -269,6 +365,9 @@ export const useCatalogStore = defineStore('catalog', () => {
     init,
     hydrateFromIndexedDb,
     refreshFromApi,
+    softRefreshFromApi,
+    bindLiveRefresh,
+    broadcastInvalidate,
     switchStore,
     productById,
     findByBarcodeOrSku,

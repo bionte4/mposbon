@@ -74,8 +74,12 @@ const pendingVariantId = ref<string | null>(null);
 const holdLabel = ref('');
 const showHeld = ref(false);
 const posView = ref<'products' | 'tables'>('products');
+/** Collapse shift tools once clocked in — keeps catalog primary on tablets. */
+const shiftToolsOpen = ref(false);
 const tableFloorRef = ref<InstanceType<typeof TableFloorPanel> | null>(null);
 const showCartTools = ref(false);
+/** Customer search + promo collapsed by default to free cart list height. */
+const cartMetaOpen = ref(false);
 const customerQuery = ref('');
 const customerHits = ref<PosCustomer[]>([]);
 const customerPoints = ref(0);
@@ -370,6 +374,7 @@ const cartItemCount = computed(() =>
 
 async function boot(): Promise<void> {
   sync.bindNetwork();
+  catalog.bindLiveRefresh();
   try {
     await catalog.init();
     await cartStore.loadOpenCart();
@@ -652,7 +657,7 @@ async function onPinConfirm(pin: string): Promise<void> {
 
 <template>
   <div
-    class="flex h-[calc(100dvh-3.5rem)] flex-col overflow-hidden bg-slate-100 lg:flex-row"
+    class="pos-shell flex h-[calc(100dvh-3.25rem)] flex-col overflow-hidden bg-slate-100 md:flex-row"
   >
     <CashDrawerModal
       v-if="drawerMode"
@@ -706,19 +711,22 @@ async function onPinConfirm(pin: string): Promise<void> {
     />
     <PrinterSetupModal />
 
-    <section class="min-h-0 flex-[1.05] overflow-y-auto p-3 sm:p-4 lg:flex-1 lg:pb-4">
-      <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            {{ auth.staff?.displayName || t('app.roles.cashier') }} · {{ auth.role || '—' }}
+    <!-- Catalog column -->
+    <section
+      class="flex min-h-0 flex-1 flex-col overflow-hidden p-2.5 sm:p-3 md:min-w-0 md:flex-1 md:pb-3"
+    >
+      <header class="mb-2 flex shrink-0 flex-wrap items-center justify-between gap-2">
+        <div class="min-w-0">
+          <p class="truncate text-xs font-semibold uppercase tracking-wide text-slate-500">
+            {{ auth.staff?.displayName || t('app.roles.cashier') }}
+            <span class="font-medium normal-case text-slate-400">· {{ auth.role || '—' }}</span>
           </p>
-          <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">{{ t('pos.title') }}</h1>
-          <p v-if="scanHint" class="mt-1 text-sm text-slate-600">{{ scanHint }}</p>
+          <p v-if="scanHint" class="mt-0.5 text-sm text-slate-600">{{ scanHint }}</p>
         </div>
-        <div class="flex flex-wrap items-center gap-2">
+        <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
           <button
             type="button"
-            class="rounded-full px-3 py-1.5 text-sm font-semibold ring-1"
+            class="touch-target rounded-full px-3 text-sm font-semibold ring-1"
             :class="
               printerConnected
                 ? 'bg-emerald-50 text-emerald-900 ring-emerald-200'
@@ -730,13 +738,13 @@ async function onPinConfirm(pin: string): Promise<void> {
             {{ t(printerStatusKey) }}
           </button>
           <p
-            class="rounded-full px-3 py-1.5 text-sm font-semibold"
+            class="touch-target rounded-full px-3 text-sm font-semibold"
             :class="shiftOpen ? 'bg-sky-100 text-sky-900' : 'bg-slate-200 text-slate-700'"
           >
             {{ shiftOpen ? t('pos.shiftOpen') : t('pos.shiftClosed') }}
           </p>
           <p
-            class="rounded-full px-3 py-1.5 text-sm font-semibold"
+            class="touch-target rounded-full px-3 text-sm font-semibold"
             :class="online ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'"
           >
             {{ syncLabel }}
@@ -746,7 +754,7 @@ async function onPinConfirm(pin: string): Promise<void> {
 
       <div
         v-if="!shiftOpen"
-        class="mb-4 flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white p-4"
+        class="mb-2 flex shrink-0 flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white p-3"
       >
         <div>
           <label class="text-sm font-medium text-slate-600">{{ t('pos.openingFloat') }}</label>
@@ -770,69 +778,86 @@ async function onPinConfirm(pin: string): Promise<void> {
 
       <div
         v-else
-        class="mb-4 flex flex-wrap items-end gap-3 rounded-2xl border border-slate-200 bg-white p-4"
+        class="mb-2 shrink-0 rounded-2xl border border-slate-200 bg-white"
       >
-        <p class="text-sm text-slate-600">
-          {{
-            t('pos.shiftSummary', {
-              id: activeShift?.id.slice(0, 8) ?? '—',
-              sales: activeShift?.saleCount ?? 0,
-              cash: formatIdrFromCents(activeShift?.cashSalesInCents ?? 0),
-            })
-          }}
-        </p>
-        <div>
-          <label class="text-sm font-medium text-slate-600">{{ t('pos.countedCash') }}</label>
-          <input
-            v-model.number="countedCash"
-            class="mt-1 min-h-14 w-44 rounded-2xl border border-slate-300 px-3 text-lg tabular-nums"
-            type="number"
-            step="1"
-            inputmode="numeric"
-          />
+        <div class="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+          <p class="min-w-0 flex-1 truncate text-sm text-slate-600">
+            {{
+              t('pos.shiftSummary', {
+                id: activeShift?.id.slice(0, 8) ?? '—',
+                sales: activeShift?.saleCount ?? 0,
+                cash: formatIdrFromCents(activeShift?.cashSalesInCents ?? 0),
+              })
+            }}
+          </p>
+          <button
+            type="button"
+            class="touch-target shrink-0 rounded-xl bg-slate-100 px-3 text-sm font-semibold text-slate-800"
+            @click="shiftToolsOpen = !shiftToolsOpen"
+          >
+            {{ shiftToolsOpen ? t('pos.shiftToolsHide') : t('pos.shiftTools') }}
+          </button>
         </div>
-        <button
-          class="touch-target rounded-2xl bg-amber-700 px-4 text-base font-semibold text-white"
-          type="button"
-          :disabled="busy"
-          @click="drawerMode = 'drop'"
+        <div
+          v-if="shiftToolsOpen"
+          class="flex flex-wrap items-end gap-3 border-t border-slate-100 px-3 py-3"
         >
-          {{ t('pos.drawer.drop') }}
-        </button>
-        <button
-          class="touch-target rounded-2xl bg-amber-900 px-4 text-base font-semibold text-white"
-          type="button"
-          :disabled="busy"
-          @click="drawerMode = 'midCount'"
-        >
-          {{ t('pos.drawer.mid') }}
-        </button>
-        <button
-          class="touch-target rounded-2xl bg-slate-800 px-6 text-base font-semibold text-white"
-          type="button"
-          :disabled="busy"
-          @click="doClockOut"
-        >
-          {{ t('pos.clockOut') }}
-        </button>
+          <div>
+            <label class="text-sm font-medium text-slate-600">{{ t('pos.countedCash') }}</label>
+            <input
+              v-model.number="countedCash"
+              class="mt-1 min-h-14 w-44 rounded-2xl border border-slate-300 px-3 text-lg tabular-nums"
+              type="number"
+              step="1"
+              inputmode="numeric"
+            />
+          </div>
+          <button
+            class="touch-target rounded-2xl bg-amber-700 px-4 text-base font-semibold text-white"
+            type="button"
+            :disabled="busy"
+            @click="drawerMode = 'drop'"
+          >
+            {{ t('pos.drawer.drop') }}
+          </button>
+          <button
+            class="touch-target rounded-2xl bg-amber-900 px-4 text-base font-semibold text-white"
+            type="button"
+            :disabled="busy"
+            @click="drawerMode = 'midCount'"
+          >
+            {{ t('pos.drawer.mid') }}
+          </button>
+          <button
+            class="touch-target rounded-2xl bg-slate-800 px-6 text-base font-semibold text-white"
+            type="button"
+            :disabled="busy"
+            @click="doClockOut"
+          >
+            {{ t('pos.clockOut') }}
+          </button>
+        </div>
       </div>
 
-      <p v-if="pageError || loadError" class="mb-4 rounded-2xl bg-red-50 p-3 text-red-800">
+      <p
+        v-if="pageError || loadError"
+        class="mb-2 shrink-0 rounded-2xl bg-red-50 p-3 text-red-800"
+      >
         {{ pageError || loadError }}
       </p>
-      <p v-if="lastSaleId" class="mb-4 rounded-2xl bg-emerald-50 p-3 text-emerald-900">
+      <p v-if="lastSaleId" class="mb-2 shrink-0 rounded-2xl bg-emerald-50 p-3 text-emerald-900">
         {{ t('pos.localSale') }}
         <code class="text-xs">{{ lastSaleId }}</code>
       </p>
-      <p v-if="lastZReport" class="mb-4 rounded-2xl bg-sky-50 p-3 text-sky-900">
+      <p v-if="lastZReport" class="mb-2 shrink-0 rounded-2xl bg-sky-50 p-3 text-sky-900">
         {{ t('pos.zDiscrepancy') }}
         {{ formatIdrFromCents(lastZReport.drawer.discrepancyInCents ?? 0) }}
       </p>
 
-      <div class="mb-4 flex gap-2">
+      <div class="mb-2 flex shrink-0 gap-2">
         <button
           type="button"
-          class="touch-target rounded-2xl px-5 text-base font-semibold"
+          class="touch-target rounded-2xl px-4 text-sm font-semibold sm:px-5 sm:text-base"
           :class="posView === 'products' ? 'bg-slate-900 text-white' : 'bg-white text-slate-800'"
           @click="posView = 'products'"
         >
@@ -840,7 +865,7 @@ async function onPinConfirm(pin: string): Promise<void> {
         </button>
         <button
           type="button"
-          class="touch-target rounded-2xl px-5 text-base font-semibold"
+          class="touch-target rounded-2xl px-4 text-sm font-semibold sm:px-5 sm:text-base"
           :class="posView === 'tables' ? 'bg-violet-700 text-white' : 'bg-white text-slate-800'"
           @click="posView = 'tables'"
         >
@@ -848,13 +873,16 @@ async function onPinConfirm(pin: string): Promise<void> {
         </button>
       </div>
 
-      <template v-if="posView === 'products'">
+      <div
+        v-if="posView === 'products'"
+        class="flex min-h-0 flex-1 flex-col overflow-hidden"
+      >
         <div
-          class="mb-4 flex gap-2 overflow-x-auto pb-1"
+          class="mb-2 flex shrink-0 gap-2 overflow-x-auto pb-0.5"
           v-on="categorySwipe.handlers"
         >
           <button
-            class="touch-target shrink-0 rounded-2xl px-5 text-base font-semibold"
+            class="touch-target shrink-0 rounded-2xl px-4 text-sm font-semibold sm:px-5 sm:text-base"
             :class="selectedCategory === 'all' ? 'bg-slate-900 text-white' : 'bg-white text-slate-800'"
             type="button"
             @click="selectedCategory = 'all'"
@@ -864,7 +892,7 @@ async function onPinConfirm(pin: string): Promise<void> {
           <button
             v-for="category in categories"
             :key="category.id"
-            class="touch-target shrink-0 rounded-2xl px-5 text-base font-semibold"
+            class="touch-target shrink-0 rounded-2xl px-4 text-sm font-semibold sm:px-5 sm:text-base"
             :class="selectedCategory === category.id ? 'bg-slate-900 text-white' : 'bg-white text-slate-800'"
             type="button"
             @click="selectedCategory = category.id"
@@ -872,27 +900,29 @@ async function onPinConfirm(pin: string): Promise<void> {
             {{ category.name }}
           </button>
         </div>
-        <p class="mb-2 hidden text-xs text-slate-400 sm:block lg:hidden">
-          {{ t('pos.swipe.categoryHint') }}
-        </p>
 
         <VirtualProductGrid
           :products="visibleProducts"
           :disabled="!shiftOpen"
           @select="onProductTap"
         />
-      </template>
+      </div>
 
-      <TableFloorPanel
+      <div
         v-else-if="session?.storeId"
-        ref="tableFloorRef"
-        :store-id="session.storeId"
-        @select="onTableSelect"
-      />
+        class="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+      >
+        <TableFloorPanel
+          ref="tableFloorRef"
+          :store-id="session.storeId"
+          @select="onTableSelect"
+        />
+      </div>
     </section>
 
+    <!-- Cart column: full-height sidebar from md up; capped share on phone stack -->
     <aside
-      class="flex min-h-0 w-full flex-[0.95] flex-col overflow-hidden border-t border-slate-200 bg-white lg:h-full lg:w-[26rem] lg:flex-none lg:shrink-0 pos:w-[28rem] kiosk:w-[32rem] lg:border-l lg:border-t-0"
+      class="pos-cart-pane flex min-h-0 w-full flex-col overflow-hidden border-t border-slate-200 bg-white max-md:max-h-[46%] max-md:min-h-[16rem] md:h-full md:w-[22rem] md:max-h-none md:min-h-0 md:flex-none md:shrink-0 md:border-l md:border-t-0 lg:w-[26rem] pos:w-[28rem] kiosk:w-[32rem]"
     >
       <CheckoutPanel
         v-if="showCheckout"
@@ -914,93 +944,146 @@ async function onPinConfirm(pin: string): Promise<void> {
       />
 
       <template v-else>
-      <div class="flex shrink-0 items-center justify-between gap-2 border-b border-slate-100 px-3 py-2.5 sm:px-4 sm:py-3">
+      <div class="flex shrink-0 items-center justify-between gap-2 border-b border-slate-100 px-3 py-2">
         <div class="min-w-0">
-          <h2 class="text-lg font-semibold sm:text-xl">{{ t('pos.cart') }}</h2>
-          <p class="truncate text-xs text-slate-500 sm:text-sm">{{ session?.storeName }}</p>
-          <p v-if="cart?.tableCode" class="mt-0.5 text-xs font-semibold text-violet-800">
+          <h2 class="text-base font-semibold leading-tight sm:text-lg">{{ t('pos.cart') }}</h2>
+          <p class="truncate text-[11px] text-slate-500 sm:text-xs">{{ session?.storeName }}</p>
+          <p v-if="cart?.tableCode" class="mt-0.5 text-[11px] font-semibold text-violet-800 sm:text-xs">
             {{ t('pos.tables.current', { code: cart.tableCode, name: cart.tableName ?? '' }) }}
             <button type="button" class="ml-1 underline" @click="cartStore.clearTable()">
               {{ t('pos.tables.clear') }}
             </button>
           </p>
         </div>
-        <span
-          v-if="cartItemCount"
-          class="rounded-full bg-slate-900 px-2.5 py-1 text-sm font-semibold text-white"
-        >
-          {{ cartItemCount }}
-        </span>
-      </div>
-
-      <div class="shrink-0 border-b border-slate-100 px-3 py-2 sm:px-4">
-        <div class="flex gap-2">
-          <input
-            v-model="customerQuery"
-            class="min-h-11 flex-1 rounded-xl border border-slate-300 px-3 text-sm"
-            :placeholder="t('pos.customer.search')"
-            @keyup.enter="searchCustomer"
-          />
+        <div class="flex shrink-0 items-center gap-1.5">
           <button
             type="button"
-            class="min-h-11 rounded-xl bg-slate-200 px-3 text-sm font-semibold"
-            @click="searchCustomer"
+            class="rounded-lg px-2 py-1.5 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200 sm:text-xs"
+            @click="cartMetaOpen = !cartMetaOpen"
           >
-            {{ t('pos.customer.find') }}
+            {{ cartMetaOpen ? t('pos.cartMetaHide') : t('pos.cartMeta') }}
           </button>
+          <span
+            v-if="cartItemCount"
+            class="rounded-full bg-slate-900 px-2 py-0.5 text-xs font-semibold text-white"
+          >
+            {{ cartItemCount }}
+          </span>
         </div>
-        <p v-if="cart?.customerName" class="mt-1.5 text-sm text-emerald-800">
+      </div>
+
+      <div
+        v-if="cartMetaOpen || cart?.customerName"
+        class="shrink-0 border-b border-slate-100 px-3 py-1.5"
+      >
+        <p v-if="cart?.customerName && !cartMetaOpen" class="text-xs font-medium text-emerald-800">
           {{ t('pos.customer.current', { name: cart.customerName }) }}
-          <button type="button" class="ml-2 underline" @click="cartStore.setCustomer(null)">
+          <button type="button" class="ml-1 underline" @click="cartStore.setCustomer(null)">
             {{ t('common.close') }}
           </button>
         </p>
-        <ul v-if="customerHits.length" class="mt-1.5 max-h-24 space-y-1 overflow-auto text-sm">
-          <li v-for="c in customerHits" :key="c.id">
+        <template v-if="cartMetaOpen">
+          <div class="flex gap-1.5">
+            <input
+              v-model="customerQuery"
+              class="min-h-10 flex-1 rounded-xl border border-slate-300 px-2.5 text-sm"
+              :placeholder="t('pos.customer.search')"
+              @keyup.enter="searchCustomer"
+            />
             <button
               type="button"
-              class="w-full rounded-xl bg-slate-50 px-3 py-2 text-left hover:bg-slate-100"
-              @click="
-                cartStore.setCustomer({ id: c.id, name: c.name });
-                customerPoints = c.loyaltyPoints ?? 0;
-                customerHits = [];
-                customerQuery = '';
-              "
+              class="min-h-10 rounded-xl bg-slate-200 px-2.5 text-sm font-semibold"
+              @click="searchCustomer"
             >
-              {{ c.name }}
-              <span class="text-slate-500">· {{ c.phone || '—' }} · {{ c.loyaltyPoints }} pts</span>
+              {{ t('pos.customer.find') }}
             </button>
-          </li>
-        </ul>
-        <button
-          v-if="customerQuery.trim()"
-          type="button"
-          class="mt-1 text-xs font-semibold text-sky-700"
-          @click="addCustomerQuick"
-        >
-          {{ t('pos.customer.create') }}
-        </button>
+          </div>
+          <p v-if="cart?.customerName" class="mt-1 text-xs text-emerald-800">
+            {{ t('pos.customer.current', { name: cart.customerName }) }}
+            <button type="button" class="ml-1 underline" @click="cartStore.setCustomer(null)">
+              {{ t('common.close') }}
+            </button>
+          </p>
+          <ul v-if="customerHits.length" class="mt-1 max-h-20 space-y-0.5 overflow-auto text-xs">
+            <li v-for="c in customerHits" :key="c.id">
+              <button
+                type="button"
+                class="w-full rounded-lg bg-slate-50 px-2.5 py-1.5 text-left hover:bg-slate-100"
+                @click="
+                  cartStore.setCustomer({ id: c.id, name: c.name });
+                  customerPoints = c.loyaltyPoints ?? 0;
+                  customerHits = [];
+                  customerQuery = '';
+                "
+              >
+                {{ c.name }}
+                <span class="text-slate-500">· {{ c.phone || '—' }} · {{ c.loyaltyPoints }} pts</span>
+              </button>
+            </li>
+          </ul>
+          <button
+            v-if="customerQuery.trim()"
+            type="button"
+            class="mt-1 text-xs font-semibold text-sky-700"
+            @click="addCustomerQuick"
+          >
+            {{ t('pos.customer.create') }}
+          </button>
+          <div class="mt-1.5 grid grid-cols-[1fr_auto] gap-1.5">
+            <input
+              v-model="promoCodeInput"
+              class="min-h-10 rounded-xl border border-slate-300 px-2 text-sm uppercase"
+              :placeholder="t('pos.promo.codePlaceholder')"
+              @keyup.enter="applyPromoCode"
+            />
+            <button
+              type="button"
+              class="min-h-10 rounded-xl bg-slate-900 px-2.5 text-sm font-semibold text-white"
+              :disabled="!cart?.items.length"
+              @click="applyPromoCode"
+            >
+              {{ t('pos.promo.apply') }}
+            </button>
+          </div>
+          <div v-if="cart?.customerId" class="mt-1.5 grid grid-cols-[1fr_auto] gap-1.5">
+            <input
+              v-model.number="loyaltyRedeemInput"
+              class="min-h-10 rounded-xl border border-slate-300 px-2 text-sm tabular-nums"
+              type="number"
+              min="0"
+              step="1"
+              :placeholder="t('pos.promo.redeemPlaceholder', { pts: customerPoints })"
+            />
+            <button
+              type="button"
+              class="min-h-10 rounded-xl bg-amber-600 px-2.5 text-sm font-semibold text-white"
+              @click="applyLoyaltyRedeem"
+            >
+              {{ t('pos.promo.redeem') }}
+            </button>
+          </div>
+        </template>
       </div>
 
-      <ul class="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-3 py-2 sm:space-y-3 sm:px-4 sm:py-3">
+      <ul class="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain px-2.5 py-1.5 sm:px-3">
         <li v-for="item in cart?.items ?? []" :key="item.id">
           <SwipeRevealRow
             :action-label="t('pos.swipe.remove')"
             :disabled="!shiftOpen"
             @commit="requestRemoveItem(item)"
           >
-            <div class="flex items-center justify-between gap-2 rounded-2xl bg-slate-50 p-2.5 sm:gap-3 sm:p-3">
-              <div class="min-w-0">
-                <p class="truncate font-semibold">{{ item.productName }}</p>
-                <p class="text-sm tabular-nums text-slate-600">
+            <div class="flex items-center justify-between gap-1.5 rounded-xl bg-slate-50 px-2 py-1.5 sm:gap-2 sm:px-2.5 sm:py-2">
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-semibold leading-tight">{{ item.productName }}</p>
+                <p class="text-xs tabular-nums text-slate-600 sm:text-sm">
                   {{ formatIdrFromCents(item.lineTotalInCents) }}
                 </p>
-                <div class="mt-1 flex gap-1">
+                <div class="mt-1 flex gap-0.5">
                   <button
                     v-for="g in [1, 2, 3, 4]"
                     :key="g"
                     type="button"
-                    class="rounded-lg px-2 py-0.5 text-xs font-semibold"
+                    class="flex h-8 min-w-8 items-center justify-center rounded-lg text-[11px] font-semibold"
                     :class="
                       (item.guestIndex ?? 1) === g
                         ? 'bg-sky-700 text-white'
@@ -1012,20 +1095,20 @@ async function onPinConfirm(pin: string): Promise<void> {
                   </button>
                 </div>
               </div>
-              <div class="flex shrink-0 items-center gap-1.5 sm:gap-2">
+              <div class="flex shrink-0 items-center gap-1">
                 <button
-                  class="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-200 text-xl font-semibold sm:h-12 sm:w-12 sm:rounded-2xl sm:text-2xl"
+                  class="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-200 text-lg font-semibold"
                   type="button"
                   :aria-label="t('pos.swipe.remove')"
                   @click="requestRemoveItem(item)"
                 >
                   −
                 </button>
-                <span class="w-7 text-center text-lg font-semibold tabular-nums sm:w-8 sm:text-xl">{{
+                <span class="w-6 text-center text-base font-semibold tabular-nums">{{
                   item.quantity
                 }}</span>
                 <button
-                  class="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-900 text-xl font-semibold text-white sm:h-12 sm:w-12 sm:rounded-2xl sm:text-2xl"
+                  class="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-900 text-lg font-semibold text-white"
                   type="button"
                   @click="cartStore.setQuantity(item.id, item.quantity + 1)"
                 >
@@ -1037,68 +1120,41 @@ async function onPinConfirm(pin: string): Promise<void> {
         </li>
         <li
           v-if="!(cart?.items.length)"
-          class="rounded-2xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500"
+          class="rounded-xl border border-dashed border-slate-200 px-3 py-5 text-center text-xs text-slate-500 sm:text-sm"
         >
           {{ t('pos.emptyCart') }}
         </li>
       </ul>
 
-      <!-- Compact checkout dock: totals + pay always visible; tools collapsible -->
-      <div class="pos-cart-dock space-y-2.5">
-        <div class="grid grid-cols-[1fr_auto] gap-1.5">
-          <input
-            v-model="promoCodeInput"
-            class="min-h-10 rounded-xl border border-slate-300 px-2 text-sm uppercase"
-            :placeholder="t('pos.promo.codePlaceholder')"
-            @keyup.enter="applyPromoCode"
-          />
-          <button
-            type="button"
-            class="min-h-10 rounded-xl bg-slate-900 px-3 text-sm font-semibold text-white"
-            :disabled="!cart?.items.length"
-            @click="applyPromoCode"
-          >
-            {{ t('pos.promo.apply') }}
-          </button>
-        </div>
-        <div v-if="cart?.customerId" class="grid grid-cols-[1fr_auto] gap-1.5">
-          <input
-            v-model.number="loyaltyRedeemInput"
-            class="min-h-10 rounded-xl border border-slate-300 px-2 text-sm tabular-nums"
-            type="number"
-            min="0"
-            step="1"
-            :placeholder="t('pos.promo.redeemPlaceholder', { pts: customerPoints })"
-          />
-          <button
-            type="button"
-            class="min-h-10 rounded-xl bg-amber-600 px-3 text-sm font-semibold text-white"
-            @click="applyLoyaltyRedeem"
-          >
-            {{ t('pos.promo.redeem') }}
-          </button>
-        </div>
+      <!-- Compact checkout dock: totals + pay always visible -->
+      <div class="pos-cart-dock space-y-1.5">
+        <p
+          v-if="cart?.promoCode && !cartMetaOpen"
+          class="text-[11px] font-medium text-emerald-800"
+        >
+          {{ t('pos.promo.applied') }}: {{ cart.promoCode }}
+        </p>
 
-        <div class="rounded-2xl bg-slate-50 px-3 py-2.5 text-sm">
+        <div class="rounded-xl bg-slate-50 px-2.5 py-1.5 text-xs sm:text-sm">
           <div class="flex justify-between text-slate-600">
             <span>{{ t('pos.subtotal') }}</span>
             <span class="tabular-nums">{{ formatIdrFromCents(cart?.subtotalInCents ?? 0) }}</span>
           </div>
-          <div class="mt-0.5 flex justify-between text-slate-600">
+          <div class="flex justify-between text-slate-600">
             <span>{{ t('pos.tax') }}</span>
             <span class="tabular-nums">{{ formatIdrFromCents(cart?.taxInCents ?? 0) }}</span>
           </div>
           <div
             v-if="cart?.discountInCents"
-            class="mt-0.5 flex justify-between text-emerald-800"
+            class="flex justify-between text-emerald-800"
           >
             <span>
               {{ t('pos.discount') }}
-              <span v-if="cart.promoCode" class="text-xs">({{ cart.promoCode }})</span>
+              <span v-if="cart.promoCode" class="text-[10px]">({{ cart.promoCode }})</span>
             </span>
             <span class="tabular-nums">-{{ formatIdrFromCents(cart.discountInCents) }}</span>
           </div>
-          <div class="mt-1.5 flex items-baseline justify-between border-t border-slate-200 pt-1.5 text-lg font-bold">
+          <div class="mt-1 flex items-baseline justify-between border-t border-slate-200 pt-1 text-base font-bold sm:text-lg">
             <span>{{ t('pos.total') }}</span>
             <span class="tabular-nums">{{ formatIdrFromCents(cart?.totalInCents ?? 0) }}</span>
           </div>
@@ -1113,12 +1169,12 @@ async function onPinConfirm(pin: string): Promise<void> {
           {{ t('pos.pay') }}
         </button>
 
-        <div v-if="guestPayOptions.length" class="flex flex-wrap gap-1.5">
+        <div v-if="guestPayOptions.length" class="flex flex-wrap gap-1">
           <button
             v-for="g in guestPayOptions"
             :key="g"
             type="button"
-            class="min-h-10 rounded-xl bg-sky-100 px-3 text-sm font-semibold text-sky-900"
+            class="min-h-9 rounded-lg bg-sky-100 px-2.5 text-xs font-semibold text-sky-900"
             :disabled="busy || !shiftOpen"
             @click="openCheckout(g)"
           >
@@ -1126,7 +1182,7 @@ async function onPinConfirm(pin: string): Promise<void> {
           </button>
         </div>
 
-        <div class="flex gap-1.5">
+        <div class="flex gap-1">
           <button
             type="button"
             class="pos-cart-tool bg-violet-100 text-violet-950"
@@ -1137,7 +1193,7 @@ async function onPinConfirm(pin: string): Promise<void> {
           </button>
           <button
             type="button"
-            class="pos-cart-tool max-w-[3rem] bg-violet-50 text-violet-900"
+            class="pos-cart-tool max-w-[2.75rem] bg-violet-50 text-violet-900"
             @click="showHeld = !showHeld; cartStore.refreshHeld()"
           >
             {{ heldCarts.length }}
@@ -1145,6 +1201,7 @@ async function onPinConfirm(pin: string): Promise<void> {
           <button
             type="button"
             class="pos-cart-tool bg-amber-100 text-amber-950"
+            :disabled="!shiftOpen"
             @click="requestDrawer"
           >
             {{ t('pos.openDrawer') }}

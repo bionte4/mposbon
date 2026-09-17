@@ -216,7 +216,7 @@ async function addCategory(): Promise<void> {
     newCategoryName.value = '';
     toast.success(t('admin.saved'));
     await refresh();
-    void catalog.refreshFromApi();
+    void catalog.refreshFromApi().then(() => catalog.broadcastInvalidate());
   } catch (err) {
     shell.setError(err instanceof Error ? err.message : t('admin.loadFailed'));
   } finally {
@@ -235,7 +235,7 @@ async function saveCategory(cat: AdminCategory): Promise<void> {
     await updateAdminCategory(cat.id, { name, sortOrder });
     toast.success(t('admin.saved'));
     await refresh();
-    void catalog.refreshFromApi();
+    void catalog.refreshFromApi().then(() => catalog.broadcastInvalidate());
   } catch (err) {
     shell.setError(err instanceof Error ? err.message : t('admin.loadFailed'));
   } finally {
@@ -255,7 +255,7 @@ async function removeCategory(cat: AdminCategory): Promise<void> {
     await deleteAdminCategory(cat.id);
     toast.success(t('admin.categoryDeleted'));
     await refresh();
-    void catalog.refreshFromApi();
+    void catalog.refreshFromApi().then(() => catalog.broadcastInvalidate());
   } catch (err) {
     shell.setError(err instanceof Error ? err.message : t('admin.loadFailed'));
   } finally {
@@ -276,7 +276,7 @@ async function addModifierGroup(): Promise<void> {
     toast.success(t('admin.modifiers.groupCreated'));
     newGroup.value = { name: '', minSelect: 0, maxSelect: 1 };
     await refresh();
-    void catalog.refreshFromApi();
+    void catalog.refreshFromApi().then(() => catalog.broadcastInvalidate());
   } catch (err) {
     shell.setError(err instanceof Error ? err.message : t('admin.loadFailed'));
   } finally {
@@ -292,7 +292,7 @@ async function removeModifierGroup(groupId: string): Promise<void> {
     await deleteModifierGroup(groupId);
     toast.success(t('admin.modifiers.groupDeleted'));
     await refresh();
-    void catalog.refreshFromApi();
+    void catalog.refreshFromApi().then(() => catalog.broadcastInvalidate());
   } catch (err) {
     shell.setError(err instanceof Error ? err.message : t('admin.loadFailed'));
   } finally {
@@ -318,7 +318,7 @@ async function addModifierOption(groupId: string): Promise<void> {
     toast.success(t('admin.modifiers.optionCreated'));
     newOption.value = { ...newOption.value, [groupId]: { name: '', priceDeltaInCents: 0 } };
     await refresh();
-    void catalog.refreshFromApi();
+    void catalog.refreshFromApi().then(() => catalog.broadcastInvalidate());
   } catch (err) {
     shell.setError(err instanceof Error ? err.message : t('admin.loadFailed'));
   } finally {
@@ -332,7 +332,7 @@ async function toggleOptionActive(optionId: string, isActive: boolean): Promise<
   try {
     await updateModifierOption(optionId, { isActive });
     await refresh();
-    void catalog.refreshFromApi();
+    void catalog.refreshFromApi().then(() => catalog.broadcastInvalidate());
   } catch (err) {
     shell.setError(err instanceof Error ? err.message : t('admin.loadFailed'));
   } finally {
@@ -348,7 +348,7 @@ async function removeModifierOptionRow(optionId: string): Promise<void> {
     await deleteModifierOption(optionId);
     toast.success(t('admin.modifiers.optionDeleted'));
     await refresh();
-    void catalog.refreshFromApi();
+    void catalog.refreshFromApi().then(() => catalog.broadcastInvalidate());
   } catch (err) {
     shell.setError(err instanceof Error ? err.message : t('admin.loadFailed'));
   } finally {
@@ -389,7 +389,7 @@ async function addProduct(): Promise<void> {
     };
     toast.success(t('admin.saved'));
     await refresh();
-    void catalog.refreshFromApi();
+    void catalog.refreshFromApi().then(() => catalog.broadcastInvalidate());
   } catch (err) {
     shell.setError(err instanceof Error ? err.message : t('admin.loadFailed'));
   } finally {
@@ -420,7 +420,7 @@ async function saveProductFull(product: AdminProduct): Promise<void> {
     });
     toast.success(t('admin.saved'));
     await refresh();
-    void catalog.refreshFromApi();
+    void catalog.refreshFromApi().then(() => catalog.broadcastInvalidate());
   } catch (err) {
     shell.setError(err instanceof Error ? err.message : t('admin.loadFailed'));
   } finally {
@@ -444,7 +444,7 @@ async function addVariant(productId: string): Promise<void> {
     newVariant.value = { sku: '', name: '', barcode: '', unitPriceInCents: 0 };
     toast.success(t('admin.variants.created'));
     await refresh();
-    void catalog.refreshFromApi();
+    void catalog.refreshFromApi().then(() => catalog.broadcastInvalidate());
   } catch (err) {
     shell.setError(err instanceof Error ? err.message : t('admin.loadFailed'));
   } finally {
@@ -467,7 +467,7 @@ async function saveVariant(v: ProductVariant): Promise<void> {
     });
     toast.success(t('admin.saved'));
     await refresh();
-    void catalog.refreshFromApi();
+    void catalog.refreshFromApi().then(() => catalog.broadcastInvalidate());
   } catch (err) {
     shell.setError(err instanceof Error ? err.message : t('admin.loadFailed'));
   } finally {
@@ -551,12 +551,12 @@ async function savePromoLimits(row: Promo): Promise<void> {
 
 <template>
   <div>
-    <div class="mb-4 flex gap-2 overflow-x-auto pb-1">
+    <div class="mb-3 flex gap-1.5 overflow-x-auto pb-0.5">
       <button
         v-for="key in SUB_TABS"
         :key="key"
         type="button"
-        class="touch-target shrink-0 rounded-2xl px-4 text-sm font-semibold"
+        class="admin-sub-tab shrink-0"
         :class="tab === key ? 'bg-teal-800 text-white' : 'bg-white text-slate-700 ring-1 ring-slate-200'"
         @click="tab = key"
       >
@@ -564,21 +564,21 @@ async function savePromoLimits(row: Promo): Promise<void> {
       </button>
     </div>
 
-    <UiPanel v-if="tab === 'products'" :title="t('admin.tabs.products')">
+    <UiPanel v-if="tab === 'products'" dense :title="t('admin.tabs.products')">
       <div
         v-if="canWrite"
-        class="mb-4 grid gap-3 rounded-xl bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-3"
+        class="mb-3 grid gap-2 rounded-xl bg-slate-50 p-2.5 sm:grid-cols-2 lg:grid-cols-3"
       >
-        <input v-model="newProduct.name" class="min-h-12 rounded-xl border border-slate-300 px-3" :placeholder="t('admin.name')" />
-        <input v-model="newProduct.sku" class="min-h-12 rounded-xl border border-slate-300 px-3" :placeholder="t('admin.sku')" />
-        <input v-model="newProduct.barcode" class="min-h-12 rounded-xl border border-slate-300 px-3" :placeholder="t('admin.barcode')" />
-        <select v-model="newProduct.categoryId" class="min-h-12 rounded-xl border border-slate-300 px-3">
+        <input v-model="newProduct.name" class="min-h-10 rounded-lg border border-slate-300 px-2.5 text-sm" :placeholder="t('admin.name')" />
+        <input v-model="newProduct.sku" class="min-h-10 rounded-lg border border-slate-300 px-2.5 text-sm" :placeholder="t('admin.sku')" />
+        <input v-model="newProduct.barcode" class="min-h-10 rounded-lg border border-slate-300 px-2.5 text-sm" :placeholder="t('admin.barcode')" />
+        <select v-model="newProduct.categoryId" class="min-h-10 rounded-lg border border-slate-300 px-2.5 text-sm">
           <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
         </select>
         <MoneyIdrInput v-model="newProduct.unitPriceInCents" :placeholder="t('admin.price')" />
-        <input v-model.number="newProduct.taxBps" class="min-h-12 rounded-xl border border-slate-300 px-3" type="number" step="1" :placeholder="t('admin.taxBps')" />
-        <input v-model.number="newProduct.stockQty" class="min-h-12 rounded-xl border border-slate-300 px-3" type="number" step="1" :placeholder="t('admin.stock')" />
-        <select v-model="newProduct.productType" class="min-h-12 rounded-xl border border-slate-300 px-3">
+        <input v-model.number="newProduct.taxBps" class="min-h-10 rounded-lg border border-slate-300 px-2.5 text-sm" type="number" step="1" :placeholder="t('admin.taxBps')" />
+        <input v-model.number="newProduct.stockQty" class="min-h-10 rounded-lg border border-slate-300 px-2.5 text-sm" type="number" step="1" :placeholder="t('admin.stock')" />
+        <select v-model="newProduct.productType" class="min-h-10 rounded-lg border border-slate-300 px-2.5 text-sm">
           <option value="RETAIL">RETAIL</option>
           <option value="MENU">MENU</option>
           <option value="INGREDIENT">INGREDIENT</option>
@@ -587,76 +587,76 @@ async function savePromoLimits(row: Promo): Promise<void> {
           <input v-model="newProduct.isActive" type="checkbox" class="h-4 w-4" />
           {{ t('admin.active') }}
         </label>
-        <button class="touch-target rounded-xl bg-emerald-600 font-semibold text-white" type="button" :disabled="busy" @click="addProduct">
+        <button class="min-h-10 rounded-xl bg-emerald-600 text-sm font-semibold text-white disabled:opacity-40" type="button" :disabled="busy" @click="addProduct">
           {{ t('admin.addProduct') }}
         </button>
       </div>
 
-      <div class="space-y-3">
+      <div class="overflow-hidden rounded-xl ring-1 ring-slate-200">
         <div
           v-for="p in products"
           :key="p.id"
-          class="rounded-2xl border border-slate-200 bg-white"
+          class="border-b border-slate-100 last:border-0"
         >
           <button
             type="button"
-            class="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+            class="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-slate-50"
             @click="toggleExpand(p)"
           >
-            <div>
-              <p class="font-medium text-slate-900">{{ p.name }}</p>
-              <p class="text-xs text-slate-500">
+            <div class="min-w-0">
+              <p class="truncate text-sm font-medium text-slate-900">{{ p.name }}</p>
+              <p class="truncate text-[11px] text-slate-500 sm:text-xs">
                 {{ p.sku }} · {{ p.category?.name || '—' }} · {{ formatIdrFromCents(p.unitPriceInCents) }}
                 · {{ p.isActive ? t('admin.active') : t('admin.inactive') }}
                 <span v-if="(p.variants ?? []).length"> · {{ (p.variants ?? []).length }} {{ t('admin.variants.label') }}</span>
               </p>
             </div>
-            <span class="text-slate-400">{{ expandedProductId === p.id ? '▾' : '▸' }}</span>
+            <span class="shrink-0 text-slate-400">{{ expandedProductId === p.id ? '▾' : '▸' }}</span>
           </button>
 
-          <div v-if="expandedProductId === p.id && productDraft[p.id]" class="border-t border-slate-100 px-4 py-4">
-            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <label class="text-sm">
+          <div v-if="expandedProductId === p.id && productDraft[p.id]" class="border-t border-slate-100 bg-slate-50/60 px-3 py-2.5">
+            <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              <label class="text-xs font-medium text-slate-600">
                 {{ t('admin.name') }}
-                <input v-model="productDraft[p.id]!.name" class="mt-1 min-h-11 w-full rounded-xl border px-3" :disabled="!canWrite" />
+                <input v-model="productDraft[p.id]!.name" class="mt-0.5 min-h-10 w-full rounded-lg border border-slate-300 px-2 text-sm" :disabled="!canWrite" />
               </label>
-              <label class="text-sm">
+              <label class="text-xs font-medium text-slate-600">
                 {{ t('admin.sku') }}
-                <input v-model="productDraft[p.id]!.sku" class="mt-1 min-h-11 w-full rounded-xl border px-3" :disabled="!canWrite" />
+                <input v-model="productDraft[p.id]!.sku" class="mt-0.5 min-h-10 w-full rounded-lg border border-slate-300 px-2 text-sm" :disabled="!canWrite" />
               </label>
-              <label class="text-sm">
+              <label class="text-xs font-medium text-slate-600">
                 {{ t('admin.barcode') }}
-                <input v-model="productDraft[p.id]!.barcode" class="mt-1 min-h-11 w-full rounded-xl border px-3" :disabled="!canWrite" />
+                <input v-model="productDraft[p.id]!.barcode" class="mt-0.5 min-h-10 w-full rounded-lg border border-slate-300 px-2 text-sm" :disabled="!canWrite" />
               </label>
-              <label class="text-sm">
+              <label class="text-xs font-medium text-slate-600">
                 {{ t('admin.category') }}
-                <select v-model="productDraft[p.id]!.categoryId" class="mt-1 min-h-11 w-full rounded-xl border px-3" :disabled="!canWrite">
+                <select v-model="productDraft[p.id]!.categoryId" class="mt-0.5 min-h-10 w-full rounded-lg border border-slate-300 px-2 text-sm" :disabled="!canWrite">
                   <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
                 </select>
               </label>
-              <label class="text-sm">
+              <label class="text-xs font-medium text-slate-600">
                 {{ t('admin.price') }}
                 <MoneyIdrInput v-model="productDraft[p.id]!.unitPriceInCents" :disabled="!canWrite" />
               </label>
-              <label class="text-sm">
+              <label class="text-xs font-medium text-slate-600">
                 {{ t('admin.taxBps') }}
-                <input v-model.number="productDraft[p.id]!.taxBps" class="mt-1 min-h-11 w-full rounded-xl border px-3" type="number" step="1" :disabled="!canWrite" />
+                <input v-model.number="productDraft[p.id]!.taxBps" class="mt-0.5 min-h-10 w-full rounded-lg border border-slate-300 px-2 text-sm" type="number" step="1" :disabled="!canWrite" />
               </label>
-              <label class="text-sm">
+              <label class="text-xs font-medium text-slate-600">
                 {{ t('admin.stock') }}
-                <input v-model.number="productDraft[p.id]!.stockQty" class="mt-1 min-h-11 w-full rounded-xl border px-3" type="number" step="1" :disabled="!canWrite" />
+                <input v-model.number="productDraft[p.id]!.stockQty" class="mt-0.5 min-h-10 w-full rounded-lg border border-slate-300 px-2 text-sm" type="number" step="1" :disabled="!canWrite" />
               </label>
-              <label class="text-sm">
+              <label class="text-xs font-medium text-slate-600">
                 {{ t('admin.productType') }}
-                <select v-model="productDraft[p.id]!.productType" class="mt-1 min-h-11 w-full rounded-xl border px-3" :disabled="!canWrite">
+                <select v-model="productDraft[p.id]!.productType" class="mt-0.5 min-h-10 w-full rounded-lg border border-slate-300 px-2 text-sm" :disabled="!canWrite">
                   <option value="RETAIL">RETAIL</option>
                   <option value="MENU">MENU</option>
                   <option value="INGREDIENT">INGREDIENT</option>
                 </select>
               </label>
-              <label class="text-sm">
+              <label class="text-xs font-medium text-slate-600">
                 {{ t('admin.kitchenStation') }}
-                <select v-model="productDraft[p.id]!.kitchenStationId" class="mt-1 min-h-11 w-full rounded-xl border px-3" :disabled="!canWrite">
+                <select v-model="productDraft[p.id]!.kitchenStationId" class="mt-0.5 min-h-10 w-full rounded-lg border border-slate-300 px-2 text-sm" :disabled="!canWrite">
                   <option value="">{{ t('admin.kitchen.noStation') }}</option>
                   <option v-for="st in kitchenStations.filter((s) => s.isActive)" :key="st.id" :value="st.id">
                     {{ st.code }} — {{ st.name }}
@@ -671,25 +671,25 @@ async function savePromoLimits(row: Promo): Promise<void> {
             <button
               v-if="canWrite"
               type="button"
-              class="touch-target mt-3 rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white"
+              class="mt-2 min-h-9 rounded-lg bg-slate-900 px-3 text-sm font-semibold text-white disabled:opacity-40"
               :disabled="busy"
               @click="saveProductFull(p)"
             >
               {{ t('admin.save') }}
             </button>
 
-            <div class="mt-6 border-t border-slate-100 pt-4">
-              <h4 class="mb-2 text-sm font-semibold text-slate-800">{{ t('admin.variants.title') }}</h4>
-              <ul class="space-y-2">
+            <div class="mt-3 border-t border-slate-200 pt-2.5">
+              <h4 class="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">{{ t('admin.variants.title') }}</h4>
+              <ul class="space-y-1.5">
                 <li
                   v-for="v in p.variants ?? []"
                   :key="v.id"
-                  class="grid gap-2 rounded-xl bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-5"
+                  class="grid gap-1.5 rounded-lg bg-white p-2 ring-1 ring-slate-100 sm:grid-cols-2 lg:grid-cols-5"
                 >
                   <template v-if="variantDraft[v.id]">
-                    <input v-model="variantDraft[v.id]!.name" class="min-h-10 rounded-lg border px-2" :disabled="!canWrite" :placeholder="t('admin.name')" />
-                    <span class="flex items-center text-xs text-slate-500">{{ v.sku }}</span>
-                    <input v-model="variantDraft[v.id]!.barcode" class="min-h-10 rounded-lg border px-2" :disabled="!canWrite" :placeholder="t('admin.barcode')" />
+                    <input v-model="variantDraft[v.id]!.name" class="min-h-9 rounded-lg border px-2 text-sm" :disabled="!canWrite" :placeholder="t('admin.name')" />
+                    <span class="flex items-center font-mono text-[11px] text-slate-500">{{ v.sku }}</span>
+                    <input v-model="variantDraft[v.id]!.barcode" class="min-h-9 rounded-lg border px-2 text-sm" :disabled="!canWrite" :placeholder="t('admin.barcode')" />
                     <MoneyIdrInput v-model="variantDraft[v.id]!.unitPriceInCents" :disabled="!canWrite" />
                     <div class="flex items-center gap-2">
                       <label class="inline-flex items-center gap-1 text-xs">
@@ -709,101 +709,101 @@ async function savePromoLimits(row: Promo): Promise<void> {
                   </template>
                 </li>
               </ul>
-              <div v-if="canWrite" class="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-                <input v-model="newVariant.sku" class="min-h-10 rounded-lg border px-2" :placeholder="t('admin.sku')" />
-                <input v-model="newVariant.name" class="min-h-10 rounded-lg border px-2" :placeholder="t('admin.name')" />
-                <input v-model="newVariant.barcode" class="min-h-10 rounded-lg border px-2" :placeholder="t('admin.barcode')" />
+              <div v-if="canWrite" class="mt-2 grid gap-1.5 sm:grid-cols-2 lg:grid-cols-5">
+                <input v-model="newVariant.sku" class="min-h-9 rounded-lg border px-2 text-sm" :placeholder="t('admin.sku')" />
+                <input v-model="newVariant.name" class="min-h-9 rounded-lg border px-2 text-sm" :placeholder="t('admin.name')" />
+                <input v-model="newVariant.barcode" class="min-h-9 rounded-lg border px-2 text-sm" :placeholder="t('admin.barcode')" />
                 <MoneyIdrInput v-model="newVariant.unitPriceInCents" :placeholder="t('admin.price')" />
-                <button type="button" class="rounded-xl bg-emerald-600 text-sm font-semibold text-white" :disabled="busy" @click="addVariant(p.id)">
+                <button type="button" class="min-h-9 rounded-lg bg-emerald-600 text-sm font-semibold text-white disabled:opacity-40" :disabled="busy" @click="addVariant(p.id)">
                   {{ t('admin.variants.add') }}
                 </button>
               </div>
             </div>
           </div>
         </div>
-        <p v-if="!products.length" class="text-sm text-slate-500">{{ t('admin.emptyProducts') }}</p>
+        <p v-if="!products.length" class="px-3 py-4 text-sm text-slate-500">{{ t('admin.emptyProducts') }}</p>
       </div>
     </UiPanel>
 
-    <UiPanel v-else-if="tab === 'categories'" :title="t('admin.tabs.categories')">
-      <div v-if="canWrite" class="mb-4 flex flex-wrap gap-2">
-        <input v-model="newCategoryName" class="min-h-12 min-w-[12rem] flex-1 rounded-xl border border-slate-300 px-3" :placeholder="t('admin.name')" />
-        <button class="touch-target rounded-xl bg-emerald-600 px-4 font-semibold text-white" type="button" :disabled="busy" @click="addCategory">
+    <UiPanel v-else-if="tab === 'categories'" dense :title="t('admin.tabs.categories')">
+      <div v-if="canWrite" class="mb-3 flex flex-wrap gap-2">
+        <input v-model="newCategoryName" class="min-h-10 min-w-[12rem] flex-1 rounded-lg border border-slate-300 px-2.5 text-sm" :placeholder="t('admin.name')" />
+        <button class="min-h-10 rounded-xl bg-emerald-600 px-3 text-sm font-semibold text-white disabled:opacity-40" type="button" :disabled="busy" @click="addCategory">
           {{ t('admin.addCategory') }}
         </button>
       </div>
-      <ul class="space-y-3">
-        <li v-for="c in categories" :key="c.id" class="rounded-2xl bg-slate-50 px-4 py-3">
-          <div v-if="canWrite" class="grid gap-2 sm:grid-cols-[1fr_6rem_auto_auto]">
-            <input v-model="catDraftName[c.id]" class="min-h-11 rounded-xl border px-3" type="text" />
-            <input v-model.number="catDraftSort[c.id]" class="min-h-11 rounded-xl border px-3 tabular-nums" type="number" step="1" />
-            <button type="button" class="min-h-11 rounded-xl bg-slate-900 px-3 text-sm font-semibold text-white disabled:opacity-40" :disabled="busy" @click="saveCategory(c)">
+      <ul class="divide-y divide-slate-100 overflow-hidden rounded-xl ring-1 ring-slate-200">
+        <li v-for="c in categories" :key="c.id" class="bg-white px-3 py-2">
+          <div v-if="canWrite" class="grid gap-1.5 sm:grid-cols-[1fr_5rem_auto_auto]">
+            <input v-model="catDraftName[c.id]" class="min-h-9 rounded-lg border px-2 text-sm" type="text" />
+            <input v-model.number="catDraftSort[c.id]" class="min-h-9 rounded-lg border px-2 text-sm tabular-nums" type="number" step="1" />
+            <button type="button" class="min-h-9 rounded-lg bg-slate-900 px-2.5 text-xs font-semibold text-white disabled:opacity-40" :disabled="busy" @click="saveCategory(c)">
               {{ t('admin.save') }}
             </button>
-            <button type="button" class="min-h-11 rounded-xl bg-red-100 px-3 text-sm font-semibold text-red-800 disabled:opacity-40" :disabled="busy || (c._count?.products ?? 0) > 0" @click="removeCategory(c)">
+            <button type="button" class="min-h-9 rounded-lg bg-red-100 px-2.5 text-xs font-semibold text-red-800 disabled:opacity-40" :disabled="busy || (c._count?.products ?? 0) > 0" @click="removeCategory(c)">
               {{ t('common.delete') }}
             </button>
           </div>
-          <div v-else class="flex items-center justify-between">
+          <div v-else class="flex items-center justify-between text-sm">
             <span class="font-medium">{{ c.name }}</span>
-            <span class="text-sm text-slate-500">#{{ c.sortOrder }}</span>
+            <span class="text-slate-500">#{{ c.sortOrder }}</span>
           </div>
-          <p class="mt-1 text-xs text-slate-500">{{ t('admin.categoryProductCount', { count: c._count?.products ?? 0 }) }}</p>
+          <p class="mt-0.5 text-[11px] text-slate-500">{{ t('admin.categoryProductCount', { count: c._count?.products ?? 0 }) }}</p>
         </li>
-        <li v-if="!categories.length" class="text-sm text-slate-500">{{ t('admin.emptyCategories') }}</li>
+        <li v-if="!categories.length" class="px-3 py-4 text-sm text-slate-500">{{ t('admin.emptyCategories') }}</li>
       </ul>
     </UiPanel>
 
-    <UiPanel v-else-if="tab === 'modifiers'" :title="t('admin.tabs.modifiers')">
-      <p class="mb-3 text-sm text-slate-600">{{ t('admin.modifiers.hint') }}</p>
-      <label class="mb-4 block text-sm font-medium text-slate-600">
+    <UiPanel v-else-if="tab === 'modifiers'" dense :title="t('admin.tabs.modifiers')">
+      <p class="mb-2 text-xs text-slate-600 sm:text-sm">{{ t('admin.modifiers.hint') }}</p>
+      <label class="mb-3 block text-xs font-medium text-slate-600">
         {{ t('admin.modifiers.product') }}
-        <select v-model="modifierProductId" class="mt-1 min-h-12 w-full max-w-md rounded-xl border px-3">
+        <select v-model="modifierProductId" class="mt-0.5 min-h-10 w-full max-w-md rounded-lg border px-2 text-sm">
           <option v-for="p in products" :key="p.id" :value="p.id">{{ p.name }} ({{ p.sku }})</option>
         </select>
       </label>
-      <div v-if="canWrite && modifierProductId" class="mb-4 grid gap-2 rounded-2xl bg-slate-50 p-3 sm:grid-cols-4">
-        <input v-model="newGroup.name" class="min-h-11 rounded-xl border px-3 sm:col-span-2" type="text" :placeholder="t('admin.modifiers.groupName')" />
-        <input v-model.number="newGroup.minSelect" class="min-h-11 rounded-xl border px-3 tabular-nums" type="number" min="0" step="1" />
-        <div class="flex gap-2">
-          <input v-model.number="newGroup.maxSelect" class="min-h-11 w-full rounded-xl border px-3 tabular-nums" type="number" min="1" step="1" />
-          <button type="button" class="touch-target shrink-0 rounded-xl bg-emerald-700 px-3 text-sm font-semibold text-white" :disabled="busy" @click="addModifierGroup">
+      <div v-if="canWrite && modifierProductId" class="mb-3 grid gap-1.5 rounded-xl bg-slate-50 p-2.5 sm:grid-cols-4">
+        <input v-model="newGroup.name" class="min-h-9 rounded-lg border px-2 text-sm sm:col-span-2" type="text" :placeholder="t('admin.modifiers.groupName')" />
+        <input v-model.number="newGroup.minSelect" class="min-h-9 rounded-lg border px-2 text-sm tabular-nums" type="number" min="0" step="1" />
+        <div class="flex gap-1.5">
+          <input v-model.number="newGroup.maxSelect" class="min-h-9 w-full rounded-lg border px-2 text-sm tabular-nums" type="number" min="1" step="1" />
+          <button type="button" class="min-h-9 shrink-0 rounded-lg bg-emerald-700 px-2.5 text-xs font-semibold text-white" :disabled="busy" @click="addModifierGroup">
             {{ t('admin.modifiers.addGroup') }}
           </button>
         </div>
       </div>
-      <div v-if="selectedModifierGroups.length" class="space-y-4">
-        <section v-for="g in selectedModifierGroups" :key="g.id" class="rounded-2xl border border-slate-200 p-4">
-          <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <div v-if="selectedModifierGroups.length" class="space-y-2">
+        <section v-for="g in selectedModifierGroups" :key="g.id" class="rounded-xl border border-slate-200 p-2.5">
+          <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h3 class="font-semibold text-slate-900">{{ g.name }}</h3>
-              <p class="text-xs text-slate-500">{{ t('admin.modifiers.bounds', { min: g.minSelect, max: g.maxSelect }) }}</p>
+              <h3 class="text-sm font-semibold text-slate-900">{{ g.name }}</h3>
+              <p class="text-[11px] text-slate-500">{{ t('admin.modifiers.bounds', { min: g.minSelect, max: g.maxSelect }) }}</p>
             </div>
-            <button v-if="canWrite" type="button" class="rounded-xl bg-red-100 px-3 py-2 text-xs font-semibold text-red-800" :disabled="busy" @click="removeModifierGroup(g.id)">
+            <button v-if="canWrite" type="button" class="rounded-lg bg-red-100 px-2 py-1 text-xs font-semibold text-red-800" :disabled="busy" @click="removeModifierGroup(g.id)">
               {{ t('admin.modifiers.deleteGroup') }}
             </button>
           </div>
-          <ul class="space-y-2">
-            <li v-for="opt in g.options" :key="opt.id" class="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm">
+          <ul class="divide-y divide-slate-100 overflow-hidden rounded-lg ring-1 ring-slate-100">
+            <li v-for="opt in g.options" :key="opt.id" class="flex flex-wrap items-center justify-between gap-2 bg-white px-2.5 py-1.5 text-sm">
               <span :class="opt.isActive ? '' : 'text-slate-400 line-through'">
                 {{ opt.name }}
                 <span class="tabular-nums text-slate-500">· {{ formatIdrFromCents(opt.priceDeltaInCents) }}</span>
               </span>
               <div v-if="canWrite" class="flex items-center gap-2">
                 <label class="inline-flex items-center gap-1 text-xs">
-                  <input type="checkbox" class="h-4 w-4" :checked="opt.isActive" @change="toggleOptionActive(opt.id, ($event.target as HTMLInputElement).checked)" />
+                  <input type="checkbox" class="h-3.5 w-3.5" :checked="opt.isActive" @change="toggleOptionActive(opt.id, ($event.target as HTMLInputElement).checked)" />
                   {{ t('admin.active') }}
                 </label>
-                <button type="button" class="rounded-lg bg-slate-200 px-2 py-1 text-xs font-semibold" :disabled="busy" @click="removeModifierOptionRow(opt.id)">
+                <button type="button" class="rounded-lg bg-slate-200 px-2 py-0.5 text-xs font-semibold" :disabled="busy" @click="removeModifierOptionRow(opt.id)">
                   {{ t('common.delete') }}
                 </button>
               </div>
             </li>
           </ul>
-          <div v-if="canWrite" class="mt-3 grid gap-2 sm:grid-cols-[1fr_minmax(8rem,12rem)_auto]">
+          <div v-if="canWrite" class="mt-2 grid gap-1.5 sm:grid-cols-[1fr_minmax(8rem,12rem)_auto]">
             <input
               :value="(newOption[g.id] ?? { name: '' }).name"
-              class="min-h-11 rounded-xl border px-3"
+              class="min-h-9 rounded-lg border px-2 text-sm"
               type="text"
               :placeholder="t('admin.modifiers.optionName')"
               @input="newOption = { ...newOption, [g.id]: { name: ($event.target as HTMLInputElement).value, priceDeltaInCents: newOption[g.id]?.priceDeltaInCents ?? 0 } }"
@@ -813,7 +813,7 @@ async function savePromoLimits(row: Promo): Promise<void> {
               :placeholder="t('admin.modifiers.priceDelta')"
               @update:model-value="(n) => (newOption = { ...newOption, [g.id]: { name: newOption[g.id]?.name ?? '', priceDeltaInCents: n } })"
             />
-            <button type="button" class="min-h-11 rounded-xl bg-slate-900 px-3 text-sm font-semibold text-white" :disabled="busy" @click="addModifierOption(g.id)">
+            <button type="button" class="min-h-9 rounded-lg bg-slate-900 px-2.5 text-xs font-semibold text-white" :disabled="busy" @click="addModifierOption(g.id)">
               {{ t('admin.modifiers.addOption') }}
             </button>
           </div>
@@ -822,65 +822,65 @@ async function savePromoLimits(row: Promo): Promise<void> {
       <p v-else class="text-sm text-slate-500">{{ t('admin.modifiers.empty') }}</p>
     </UiPanel>
 
-    <UiPanel v-else :title="t('admin.tabs.promos')">
-      <p class="mb-4 text-sm text-slate-600">{{ t('admin.promos.hint') }}</p>
-      <div v-if="canWrite" class="mb-4 grid gap-3 rounded-xl bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-3">
-        <input v-model="newPromo.code" class="min-h-12 rounded-xl border px-3 uppercase" :placeholder="t('admin.promos.code')" />
-        <input v-model="newPromo.name" class="min-h-12 rounded-xl border px-3" :placeholder="t('admin.promos.name')" />
-        <select v-model="newPromo.type" class="min-h-12 rounded-xl border px-3">
+    <UiPanel v-else dense :title="t('admin.tabs.promos')">
+      <p class="mb-2 text-xs text-slate-600 sm:text-sm">{{ t('admin.promos.hint') }}</p>
+      <div v-if="canWrite" class="mb-3 grid gap-2 rounded-xl bg-slate-50 p-2.5 sm:grid-cols-2 lg:grid-cols-3">
+        <input v-model="newPromo.code" class="min-h-10 rounded-lg border px-2.5 text-sm uppercase" :placeholder="t('admin.promos.code')" />
+        <input v-model="newPromo.name" class="min-h-10 rounded-lg border px-2.5 text-sm" :placeholder="t('admin.promos.name')" />
+        <select v-model="newPromo.type" class="min-h-10 rounded-lg border px-2.5 text-sm">
           <option value="PERCENT">{{ t('admin.promos.percent') }}</option>
           <option value="FIXED">{{ t('admin.promos.fixed') }}</option>
         </select>
-        <input v-if="newPromo.type === 'PERCENT'" v-model.number="newPromo.percentBps" class="min-h-12 rounded-xl border px-3" type="number" step="1" :placeholder="t('admin.promos.percentBps')" />
+        <input v-if="newPromo.type === 'PERCENT'" v-model.number="newPromo.percentBps" class="min-h-10 rounded-lg border px-2.5 text-sm" type="number" step="1" :placeholder="t('admin.promos.percentBps')" />
         <MoneyIdrInput v-else v-model="newPromo.amountInCents" :placeholder="t('admin.promos.amount')" />
-        <input v-model.number="newPromo.minSubtotalInCents" class="min-h-12 rounded-xl border px-3" type="number" step="1" :placeholder="t('admin.promos.minSubtotal')" />
-        <input :value="newPromo.usageLimit ?? ''" class="min-h-12 rounded-xl border px-3" type="number" step="1" :placeholder="t('admin.promos.usageLimit')" @input="newPromo.usageLimit = ($event.target as HTMLInputElement).value === '' ? null : Number(($event.target as HTMLInputElement).value)" />
-        <button type="button" class="touch-target rounded-xl bg-emerald-600 font-semibold text-white" :disabled="busy" @click="addPromo">
+        <input v-model.number="newPromo.minSubtotalInCents" class="min-h-10 rounded-lg border px-2.5 text-sm" type="number" step="1" :placeholder="t('admin.promos.minSubtotal')" />
+        <input :value="newPromo.usageLimit ?? ''" class="min-h-10 rounded-lg border px-2.5 text-sm" type="number" step="1" :placeholder="t('admin.promos.usageLimit')" @input="newPromo.usageLimit = ($event.target as HTMLInputElement).value === '' ? null : Number(($event.target as HTMLInputElement).value)" />
+        <button type="button" class="min-h-10 rounded-xl bg-emerald-600 text-sm font-semibold text-white disabled:opacity-40" :disabled="busy" @click="addPromo">
           {{ t('admin.promos.add') }}
         </button>
       </div>
-      <ul class="space-y-3">
-        <li v-for="p in promos" :key="p.id" class="rounded-2xl bg-slate-50 px-4 py-3">
+      <ul class="divide-y divide-slate-100 overflow-hidden rounded-xl ring-1 ring-slate-200">
+        <li v-for="p in promos" :key="p.id" class="bg-white px-3 py-2">
           <div class="flex flex-wrap items-center justify-between gap-2">
-            <div>
+            <div class="text-sm">
               <strong>{{ p.code }}</strong> · {{ p.name }} ·
               {{ p.type === 'PERCENT' ? `${(p.percentBps ?? 0) / 100}%` : formatIdrFromCents(p.amountInCents ?? 0) }}
-              <span class="text-slate-500">
+              <span class="text-xs text-slate-500">
                 · {{ p.isActive ? t('admin.active') : t('admin.inactive') }}
                 · used {{ p.usedCount }}{{ p.usageLimit != null ? `/${p.usageLimit}` : '' }}
               </span>
             </div>
-            <button v-if="canWrite" type="button" class="touch-target rounded-xl bg-white px-3 text-sm font-semibold ring-1 ring-slate-200" :disabled="busy" @click="togglePromo(p)">
+            <button v-if="canWrite" type="button" class="min-h-8 rounded-lg bg-white px-2.5 text-xs font-semibold ring-1 ring-slate-200" :disabled="busy" @click="togglePromo(p)">
               {{ p.isActive ? t('admin.promos.deactivate') : t('admin.promos.activate') }}
             </button>
           </div>
-          <div v-if="canWrite && promoDraft[p.id]" class="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-            <label class="text-xs">
+          <div v-if="canWrite && promoDraft[p.id]" class="mt-2 grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4">
+            <label class="text-[11px] text-slate-600">
               {{ t('admin.promos.usageLimit') }}
               <input
                 :value="promoDraft[p.id]!.usageLimit ?? ''"
-                class="mt-1 min-h-10 w-full rounded-lg border px-2"
+                class="mt-0.5 min-h-9 w-full rounded-lg border px-2 text-sm"
                 type="number"
                 @input="promoDraft[p.id]!.usageLimit = ($event.target as HTMLInputElement).value === '' ? null : Number(($event.target as HTMLInputElement).value)"
               />
             </label>
-            <label class="text-xs">
+            <label class="text-[11px] text-slate-600">
               {{ t('admin.promos.minSubtotal') }}
               <MoneyIdrInput v-model="promoDraft[p.id]!.minSubtotalInCents" />
             </label>
-            <label class="text-xs">
+            <label class="text-[11px] text-slate-600">
               {{ t('admin.promos.maxDiscount') }}
               <MoneyIdrInput
                 :model-value="promoDraft[p.id]!.maxDiscountInCents ?? 0"
                 @update:model-value="(n) => (promoDraft[p.id]!.maxDiscountInCents = n)"
               />
             </label>
-            <button type="button" class="self-end rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white" :disabled="busy" @click="savePromoLimits(p)">
+            <button type="button" class="self-end min-h-9 rounded-lg bg-slate-900 px-2.5 text-xs font-semibold text-white" :disabled="busy" @click="savePromoLimits(p)">
               {{ t('admin.save') }}
             </button>
           </div>
         </li>
-        <li v-if="!promos.length" class="text-slate-500">{{ t('admin.promos.empty') }}</li>
+        <li v-if="!promos.length" class="px-3 py-4 text-sm text-slate-500">{{ t('admin.promos.empty') }}</li>
       </ul>
     </UiPanel>
   </div>

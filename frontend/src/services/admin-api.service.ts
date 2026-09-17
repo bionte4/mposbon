@@ -399,7 +399,10 @@ export type GlAccount = {
   code: string;
   name: string;
   type: string;
+  isActive?: boolean;
 };
+
+export type GlAccountType = 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'EXPENSE';
 
 export type JournalEntry = {
   id: string;
@@ -415,10 +418,59 @@ export type JournalEntry = {
   }>;
 };
 
-export function fetchGlAccounts() {
-  return apiGet<GlAccount[]>('/gl/accounts');
+export function fetchGlAccounts(includeInactive = false) {
+  const q = includeInactive ? '?includeInactive=1' : '';
+  return apiGet<GlAccount[]>(`/gl/accounts${q}`);
+}
+
+export function createGlAccount(body: {
+  code: string;
+  name: string;
+  type: GlAccountType;
+}) {
+  return apiPost<GlAccount>('/gl/accounts', body);
+}
+
+export function updateGlAccount(
+  id: string,
+  body: { code?: string; name?: string; type?: GlAccountType },
+) {
+  return apiPatch<GlAccount>(`/gl/accounts/${encodeURIComponent(id)}`, body);
+}
+
+export function deactivateGlAccount(id: string) {
+  return apiPost<GlAccount>(`/gl/accounts/${encodeURIComponent(id)}/deactivate`);
+}
+
+export function activateGlAccount(id: string) {
+  return apiPost<GlAccount>(`/gl/accounts/${encodeURIComponent(id)}/activate`);
 }
 
 export function fetchJournalEntries(limit = 50) {
   return apiGet<JournalEntry[]>(`/gl/entries?limit=${limit}`);
+}
+
+export type TenantBranding = {
+  tenantId: string;
+  slug: string;
+  brandName: string;
+  logoUrl: string | null;
+  accentColor: string | null;
+};
+
+/** Public — used on login before JWT. */
+export function fetchPublicBranding() {
+  return apiGet<TenantBranding>('/tenants/branding', { silent: true });
+}
+
+export function fetchTenantBranding() {
+  return apiGet<TenantBranding>('/tenants/current/branding');
+}
+
+export function updateTenantBranding(body: {
+  brandName?: string | null;
+  logoUrl?: string | null;
+  accentColor?: string | null;
+}) {
+  return apiPatch<TenantBranding>('/tenants/current/branding', body);
 }

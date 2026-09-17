@@ -357,12 +357,12 @@ async function assignKitchenStation(): Promise<void> {
 
 <template>
   <div>
-    <div class="mb-4 flex gap-2 overflow-x-auto pb-1">
+    <div class="mb-3 flex gap-1.5 overflow-x-auto pb-0.5">
       <button
         v-for="key in SUB_TABS"
         :key="key"
         type="button"
-        class="touch-target shrink-0 rounded-2xl px-4 text-sm font-semibold"
+        class="admin-sub-tab shrink-0"
         :class="tab === key ? 'bg-teal-800 text-white' : 'bg-white text-slate-700 ring-1 ring-slate-200'"
         @click="tab = key"
       >
@@ -370,70 +370,72 @@ async function assignKitchenStation(): Promise<void> {
       </button>
     </div>
 
-    <UiPanel v-if="tab === 'stores'" :title="t('admin.tabs.stores')">
+    <UiPanel v-if="tab === 'stores'" dense :title="t('admin.tabs.stores')">
       <p class="mb-3 text-sm text-slate-600">{{ t('admin.stores.hint') }}</p>
       <div
         v-if="canWrite"
-        class="mb-4 grid gap-3 rounded-2xl bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-3"
+        class="mb-2 grid gap-2 rounded-xl bg-slate-50 p-2.5 sm:grid-cols-2 lg:grid-cols-3"
       >
-        <input v-model="newStore.code" class="min-h-11 rounded-xl border px-3" :placeholder="t('admin.code')" />
-        <input v-model="newStore.name" class="min-h-11 rounded-xl border px-3" :placeholder="t('admin.name')" />
-        <input v-model="newStore.phone" class="min-h-11 rounded-xl border px-3" :placeholder="t('admin.stores.phone')" />
+        <input v-model="newStore.code" class="min-h-9 rounded-lg border border-slate-300 px-2.5 text-sm" :placeholder="t('admin.code')" />
+        <input v-model="newStore.name" class="min-h-9 rounded-lg border border-slate-300 px-2.5 text-sm" :placeholder="t('admin.name')" />
+        <input v-model="newStore.phone" class="min-h-9 rounded-lg border border-slate-300 px-2.5 text-sm" :placeholder="t('admin.stores.phone')" />
         <input
           v-model="newStore.address"
-          class="min-h-11 rounded-xl border px-3 sm:col-span-2"
+          class="min-h-9 rounded-lg border border-slate-300 px-2.5 text-sm sm:col-span-2"
           :placeholder="t('admin.stores.address')"
         />
-        <input v-model="newStore.timezone" class="min-h-11 rounded-xl border px-3" :placeholder="t('admin.stores.timezone')" />
+        <input v-model="newStore.timezone" class="min-h-9 rounded-lg border border-slate-300 px-2.5 text-sm" :placeholder="t('admin.stores.timezone')" />
         <button
           type="button"
-          class="touch-target rounded-xl bg-emerald-600 text-sm font-semibold text-white sm:col-span-2 lg:col-span-3"
+          class="min-h-9 rounded-lg bg-emerald-600 text-sm font-semibold text-white sm:col-span-2 lg:col-span-3"
           :disabled="busy"
           @click="addStore"
         >
           {{ t('admin.stores.add') }}
         </button>
       </div>
-      <ul class="space-y-4">
-        <li v-for="s in stores" :key="s.id" class="rounded-2xl bg-slate-50 px-4 py-4">
-          <p class="font-medium text-slate-900">{{ s.code }} — {{ s.name }}</p>
-          <p class="mt-1 text-xs text-slate-500">
-            {{ s.qrisPayload ? t('admin.qrisConfigured') : t('admin.qrisEmpty') }}
-          </p>
-          <div v-if="canWrite && storeDraft[s.id]" class="mt-3 grid gap-3 sm:grid-cols-2">
-            <label class="text-sm font-medium text-slate-600">
+      <ul class="divide-y divide-slate-100 overflow-hidden rounded-xl ring-1 ring-slate-200">
+        <li v-for="s in stores" :key="s.id" class="bg-white px-3 py-2">
+          <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+            <p class="text-sm font-semibold text-slate-900">{{ s.code }} — {{ s.name }}</p>
+            <p class="text-xs text-slate-500">
+              {{ s.qrisPayload ? t('admin.qrisConfigured') : t('admin.qrisEmpty') }}
+            </p>
+          </div>
+          <div v-if="canWrite && storeDraft[s.id]" class="mt-2 grid gap-2 sm:grid-cols-2">
+            <label class="text-xs font-medium text-slate-600">
               {{ t('admin.name') }}
-              <input v-model="storeDraft[s.id]!.name" class="mt-1 min-h-11 w-full rounded-xl border px-3" />
+              <input v-model="storeDraft[s.id]!.name" class="mt-0.5 min-h-9 w-full rounded-lg border border-slate-300 px-2.5 text-sm" />
             </label>
-            <label class="text-sm font-medium text-slate-600">
+            <label class="text-xs font-medium text-slate-600">
               {{ t('admin.stores.phone') }}
-              <input v-model="storeDraft[s.id]!.phone" class="mt-1 min-h-11 w-full rounded-xl border px-3" />
+              <input v-model="storeDraft[s.id]!.phone" class="mt-0.5 min-h-9 w-full rounded-lg border border-slate-300 px-2.5 text-sm" />
             </label>
-            <label class="text-sm font-medium text-slate-600 sm:col-span-2">
+            <label class="text-xs font-medium text-slate-600 sm:col-span-2">
               {{ t('admin.stores.address') }}
-              <input v-model="storeDraft[s.id]!.address" class="mt-1 min-h-11 w-full rounded-xl border px-3" />
+              <input v-model="storeDraft[s.id]!.address" class="mt-0.5 min-h-9 w-full rounded-lg border border-slate-300 px-2.5 text-sm" />
             </label>
-            <label class="text-sm font-medium text-slate-600">
+            <label class="text-xs font-medium text-slate-600">
               {{ t('admin.stores.timezone') }}
-              <input v-model="storeDraft[s.id]!.timezone" class="mt-1 min-h-11 w-full rounded-xl border px-3" />
+              <input v-model="storeDraft[s.id]!.timezone" class="mt-0.5 min-h-9 w-full rounded-lg border border-slate-300 px-2.5 text-sm" />
             </label>
-            <label class="inline-flex items-center gap-2 self-end text-sm">
+            <label class="inline-flex items-center gap-2 self-end text-xs">
               <input v-model="storeDraft[s.id]!.isActive" type="checkbox" class="h-4 w-4" />
               {{ storeDraft[s.id]!.isActive ? t('admin.active') : t('admin.inactive') }}
             </label>
-            <label class="text-sm font-medium text-slate-600 sm:col-span-2">
+            <label class="text-xs font-medium text-slate-600 sm:col-span-2">
               {{ t('admin.stores.receiptHeader') }}
-              <textarea v-model="storeDraft[s.id]!.receiptHeader" class="mt-1 min-h-16 w-full rounded-xl border px-3 py-2 text-sm" rows="2" />
+              <textarea v-model="storeDraft[s.id]!.receiptHeader" class="mt-0.5 min-h-12 w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm" rows="2" />
             </label>
-            <label class="text-sm font-medium text-slate-600 sm:col-span-2">
+            <label class="text-xs font-medium text-slate-600 sm:col-span-2">
               {{ t('admin.stores.receiptFooter') }}
-              <textarea v-model="storeDraft[s.id]!.receiptFooter" class="mt-1 min-h-16 w-full rounded-xl border px-3 py-2 text-sm" rows="2" />
+              <textarea v-model="storeDraft[s.id]!.receiptFooter" class="mt-0.5 min-h-12 w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm" rows="2" />
             </label>
-            <label class="text-sm font-medium text-slate-600 sm:col-span-2">
+            <label class="text-xs font-medium text-slate-600 sm:col-span-2">
               {{ t('admin.qrisPayload') }}
               <textarea
                 v-model="storeDraft[s.id]!.qrisPayload"
-                class="mt-1 min-h-24 w-full rounded-xl border border-slate-300 px-3 py-2 font-mono text-xs"
+                class="mt-0.5 min-h-14 w-full rounded-lg border border-slate-300 px-2.5 py-1.5 font-mono text-xs"
                 rows="3"
                 :placeholder="t('admin.qrisPlaceholder')"
                 spellcheck="false"
@@ -441,7 +443,7 @@ async function assignKitchenStation(): Promise<void> {
             </label>
             <button
               type="button"
-              class="touch-target rounded-2xl bg-slate-900 px-4 text-sm font-semibold text-white disabled:opacity-40 sm:col-span-2"
+              class="min-h-9 rounded-lg bg-slate-900 px-3 text-sm font-semibold text-white disabled:opacity-40 sm:col-span-2"
               :disabled="busy"
               @click="saveStore(s)"
             >
@@ -449,30 +451,30 @@ async function assignKitchenStation(): Promise<void> {
             </button>
           </div>
         </li>
-        <li v-if="!stores.length" class="text-sm text-slate-500">{{ t('admin.emptyStores') }}</li>
+        <li v-if="!stores.length" class="px-3 py-3 text-sm text-slate-500">{{ t('admin.emptyStores') }}</li>
       </ul>
     </UiPanel>
 
-    <UiPanel v-else-if="tab === 'tables'" :title="t('admin.tabs.tables')">
-      <p class="mb-4 text-sm text-slate-600">{{ t('admin.tables.hint') }}</p>
-      <label class="mb-4 block text-sm font-medium text-slate-600">
+    <UiPanel v-else-if="tab === 'tables'" dense :title="t('admin.tabs.tables')">
+      <p class="mb-2 text-sm text-slate-600">{{ t('admin.tables.hint') }}</p>
+      <label class="mb-2 block text-sm font-medium text-slate-600">
         {{ t('admin.inventory.store') }}
-        <select v-model="tablesStoreId" class="mt-1 min-h-11 w-full max-w-md rounded-xl border px-3" @change="loadTablesAdmin(tablesStoreId)">
+        <select v-model="tablesStoreId" class="mt-1 min-h-10 w-full max-w-md rounded-xl border px-3" @change="loadTablesAdmin(tablesStoreId)">
           <option v-for="s in stores" :key="s.id" :value="s.id">{{ s.code }} — {{ s.name }}</option>
         </select>
       </label>
-      <div v-if="canWrite" class="mb-4 grid gap-2 rounded-2xl bg-slate-50 p-3 sm:grid-cols-3">
-        <input v-model="newTableArea.name" class="min-h-11 rounded-xl border px-3" :placeholder="t('admin.tables.areaName')" />
-        <input v-model.number="newTableArea.sortOrder" class="min-h-11 rounded-xl border px-3" type="number" :placeholder="t('admin.sortOrder')" />
-        <button type="button" class="touch-target rounded-xl bg-slate-900 text-sm font-semibold text-white" :disabled="busy" @click="addTableAreaRow">
+      <div v-if="canWrite" class="mb-2 grid gap-2 rounded-xl bg-slate-50 p-2.5 sm:grid-cols-3">
+        <input v-model="newTableArea.name" class="min-h-9 rounded-lg border border-slate-300 px-2.5 text-sm" :placeholder="t('admin.tables.areaName')" />
+        <input v-model.number="newTableArea.sortOrder" class="min-h-9 rounded-lg border border-slate-300 px-2.5 text-sm" type="number" :placeholder="t('admin.sortOrder')" />
+        <button type="button" class="min-h-9 rounded-lg bg-slate-900 text-sm font-semibold text-white" :disabled="busy" @click="addTableAreaRow">
           {{ t('admin.tables.addArea') }}
         </button>
       </div>
-      <ul class="mb-6 space-y-2 text-sm">
-        <li v-for="a in tableAreas" :key="a.id" class="rounded-xl bg-white px-3 py-2 ring-1 ring-slate-100">
+      <ul class="mb-3 divide-y divide-slate-100 overflow-hidden rounded-xl text-sm ring-1 ring-slate-200">
+        <li v-for="a in tableAreas" :key="a.id" class="bg-white px-3 py-1.5">
           <div v-if="canWrite && areaDraft[a.id]" class="grid gap-2 sm:grid-cols-[1fr_5rem_auto_auto]">
-            <input v-model="areaDraft[a.id]!.name" class="min-h-10 rounded-lg border px-2" />
-            <input v-model.number="areaDraft[a.id]!.sortOrder" class="min-h-10 rounded-lg border px-2" type="number" />
+            <input v-model="areaDraft[a.id]!.name" class="min-h-9 rounded-lg border px-2 text-sm" />
+            <input v-model.number="areaDraft[a.id]!.sortOrder" class="min-h-9 rounded-lg border px-2 text-sm" type="number" />
             <button type="button" class="text-xs font-semibold text-sky-800 underline" @click="saveTableArea(a)">{{ t('admin.save') }}</button>
             <button type="button" class="text-xs font-semibold underline" @click="toggleTableArea(a)">
               {{ a.isActive ? t('admin.inactive') : t('admin.active') }}
@@ -481,16 +483,16 @@ async function assignKitchenStation(): Promise<void> {
           <span v-else>{{ a.name }} · #{{ a.sortOrder }}</span>
         </li>
       </ul>
-      <div v-if="canWrite" class="mb-4 grid gap-2 rounded-2xl bg-violet-50 p-3 sm:grid-cols-2 lg:grid-cols-6">
-        <input v-model="newDiningTable.code" class="min-h-11 rounded-xl border px-3 uppercase" :placeholder="t('admin.code')" />
-        <input v-model="newDiningTable.name" class="min-h-11 rounded-xl border px-3" :placeholder="t('admin.name')" />
-        <select v-model="newDiningTable.areaId" class="min-h-11 rounded-xl border px-3">
+      <div v-if="canWrite" class="mb-2 grid gap-2 rounded-xl bg-violet-50 p-2.5 sm:grid-cols-2 lg:grid-cols-6">
+        <input v-model="newDiningTable.code" class="min-h-9 rounded-lg border border-slate-300 px-2.5 text-sm uppercase" :placeholder="t('admin.code')" />
+        <input v-model="newDiningTable.name" class="min-h-9 rounded-lg border border-slate-300 px-2.5 text-sm" :placeholder="t('admin.name')" />
+        <select v-model="newDiningTable.areaId" class="min-h-9 rounded-lg border border-slate-300 px-2.5 text-sm">
           <option value="">{{ t('admin.tables.noArea') }}</option>
           <option v-for="a in tableAreas.filter((x) => x.isActive)" :key="a.id" :value="a.id">{{ a.name }}</option>
         </select>
-        <input v-model.number="newDiningTable.capacity" class="min-h-11 rounded-xl border px-3" type="number" min="1" :placeholder="t('admin.tables.capacity')" />
-        <input v-model.number="newDiningTable.sortOrder" class="min-h-11 rounded-xl border px-3" type="number" :placeholder="t('admin.sortOrder')" />
-        <button type="button" class="touch-target rounded-xl bg-violet-700 text-sm font-semibold text-white" :disabled="busy" @click="addDiningTableRow">
+        <input v-model.number="newDiningTable.capacity" class="min-h-9 rounded-lg border border-slate-300 px-2.5 text-sm" type="number" min="1" :placeholder="t('admin.tables.capacity')" />
+        <input v-model.number="newDiningTable.sortOrder" class="min-h-9 rounded-lg border border-slate-300 px-2.5 text-sm" type="number" :placeholder="t('admin.sortOrder')" />
+        <button type="button" class="min-h-9 rounded-lg bg-violet-700 text-sm font-semibold text-white" :disabled="busy" @click="addDiningTableRow">
           {{ t('admin.tables.addTable') }}
         </button>
       </div>
@@ -498,34 +500,34 @@ async function assignKitchenStation(): Promise<void> {
         <table class="min-w-full text-left text-sm">
           <thead class="border-b border-slate-200 bg-slate-50 text-slate-600">
             <tr>
-              <th class="px-3 py-2.5">{{ t('admin.code') }}</th>
-              <th class="px-3 py-2.5">{{ t('admin.name') }}</th>
-              <th class="px-3 py-2.5">{{ t('admin.tables.capacity') }}</th>
-              <th class="px-3 py-2.5">{{ t('admin.status') }}</th>
-              <th v-if="canWrite" class="px-3 py-2.5" />
+              <th class="px-2.5 py-1.5">{{ t('admin.code') }}</th>
+              <th class="px-2.5 py-1.5">{{ t('admin.name') }}</th>
+              <th class="px-2.5 py-1.5">{{ t('admin.tables.capacity') }}</th>
+              <th class="px-2.5 py-1.5">{{ t('admin.status') }}</th>
+              <th v-if="canWrite" class="px-2.5 py-1.5" />
             </tr>
           </thead>
           <tbody>
             <tr v-for="tbl in diningTables" :key="tbl.id" class="border-b border-slate-100 last:border-0">
-              <td class="px-3 py-2.5">
+              <td class="px-2.5 py-1.5">
                 <input v-if="canWrite && tableDraft[tbl.id]" v-model="tableDraft[tbl.id]!.code" class="min-h-10 w-20 rounded-lg border px-2 uppercase" />
                 <span v-else class="font-semibold">{{ tbl.code }}</span>
               </td>
-              <td class="px-3 py-2.5">
+              <td class="px-2.5 py-1.5">
                 <input v-if="canWrite && tableDraft[tbl.id]" v-model="tableDraft[tbl.id]!.name" class="min-h-10 w-full rounded-lg border px-2" />
                 <span v-else>{{ tbl.name }}</span>
               </td>
-              <td class="px-3 py-2.5">
+              <td class="px-2.5 py-1.5">
                 <input v-if="canWrite && tableDraft[tbl.id]" v-model.number="tableDraft[tbl.id]!.capacity" class="min-h-10 w-16 rounded-lg border px-2" type="number" min="1" />
                 <span v-else>{{ tbl.capacity }}</span>
               </td>
-              <td class="px-3 py-2.5">
+              <td class="px-2.5 py-1.5">
                 <button v-if="canWrite" type="button" class="text-xs font-semibold underline" @click="toggleDiningTable(tbl)">
                   {{ tbl.isActive ? t('admin.active') : t('admin.inactive') }}
                 </button>
                 <span v-else>{{ tbl.isActive ? t('admin.active') : t('admin.inactive') }}</span>
               </td>
-              <td v-if="canWrite" class="px-3 py-2.5">
+              <td v-if="canWrite" class="px-2.5 py-1.5">
                 <button type="button" class="text-xs font-semibold text-sky-800 underline" @click="saveDiningTable(tbl)">{{ t('admin.save') }}</button>
               </td>
             </tr>
@@ -537,28 +539,28 @@ async function assignKitchenStation(): Promise<void> {
       </div>
     </UiPanel>
 
-    <UiPanel v-else :title="t('admin.tabs.kitchen')">
-      <p class="mb-4 text-sm text-slate-600">{{ t('admin.kitchen.hint') }}</p>
-      <label class="mb-4 block text-sm font-medium text-slate-700">
+    <UiPanel v-else dense :title="t('admin.tabs.kitchen')">
+      <p class="mb-2 text-sm text-slate-600">{{ t('admin.kitchen.hint') }}</p>
+      <label class="mb-2 block text-sm font-medium text-slate-700">
         {{ t('admin.inventory.store') }}
-        <select v-model="kitchenStoreId" class="mt-1 min-h-11 w-full max-w-md rounded-xl border px-3" @change="loadKitchenAdmin(kitchenStoreId)">
+        <select v-model="kitchenStoreId" class="mt-1 min-h-10 w-full max-w-md rounded-xl border px-3" @change="loadKitchenAdmin(kitchenStoreId)">
           <option v-for="s in stores" :key="s.id" :value="s.id">{{ s.code }} — {{ s.name }}</option>
         </select>
       </label>
-      <div v-if="canWrite" class="mb-4 grid gap-2 rounded-xl bg-orange-50 p-3 sm:grid-cols-4">
-        <input v-model="newKitchenStation.code" class="min-h-11 rounded-xl border px-3 uppercase" :placeholder="t('admin.code')" />
-        <input v-model="newKitchenStation.name" class="min-h-11 rounded-xl border px-3" :placeholder="t('admin.name')" />
-        <input v-model.number="newKitchenStation.sortOrder" type="number" class="min-h-11 rounded-xl border px-3" :placeholder="t('admin.sortOrder')" />
-        <button type="button" class="touch-target rounded-xl bg-orange-600 font-semibold text-white" :disabled="busy" @click="addKitchenStationRow">
+      <div v-if="canWrite" class="mb-2 grid gap-2 rounded-xl bg-orange-50 p-2.5 sm:grid-cols-4">
+        <input v-model="newKitchenStation.code" class="min-h-9 rounded-lg border border-slate-300 px-2.5 text-sm uppercase" :placeholder="t('admin.code')" />
+        <input v-model="newKitchenStation.name" class="min-h-9 rounded-lg border border-slate-300 px-2.5 text-sm" :placeholder="t('admin.name')" />
+        <input v-model.number="newKitchenStation.sortOrder" type="number" class="min-h-9 rounded-lg border border-slate-300 px-2.5 text-sm" :placeholder="t('admin.sortOrder')" />
+        <button type="button" class="min-h-9 rounded-lg bg-orange-600 text-sm font-semibold text-white" :disabled="busy" @click="addKitchenStationRow">
           {{ t('admin.kitchen.addStation') }}
         </button>
       </div>
-      <ul class="mb-6 space-y-2 text-sm">
-        <li v-for="st in kitchenStations" :key="st.id" class="rounded-xl bg-white px-3 py-2 ring-1 ring-slate-100">
+      <ul class="mb-3 divide-y divide-slate-100 overflow-hidden rounded-xl text-sm ring-1 ring-slate-200">
+        <li v-for="st in kitchenStations" :key="st.id" class="bg-white px-3 py-1.5">
           <div v-if="canWrite && stationDraft[st.id]" class="grid gap-2 sm:grid-cols-[auto_1fr_5rem_auto_auto]">
             <span class="self-center font-mono text-xs">{{ st.code }}</span>
-            <input v-model="stationDraft[st.id]!.name" class="min-h-10 rounded-lg border px-2" />
-            <input v-model.number="stationDraft[st.id]!.sortOrder" class="min-h-10 rounded-lg border px-2" type="number" />
+            <input v-model="stationDraft[st.id]!.name" class="min-h-9 rounded-lg border px-2 text-sm" />
+            <input v-model.number="stationDraft[st.id]!.sortOrder" class="min-h-9 rounded-lg border px-2 text-sm" type="number" />
             <button type="button" class="text-xs font-semibold text-sky-800 underline" @click="saveKitchenStation(st)">{{ t('admin.save') }}</button>
             <button
               type="button"
@@ -571,16 +573,16 @@ async function assignKitchenStation(): Promise<void> {
           <span v-else>{{ st.code }} · {{ st.name }}</span>
         </li>
       </ul>
-      <div v-if="canWrite" class="grid gap-2 rounded-xl bg-slate-50 p-3 sm:grid-cols-3">
-        <select v-model="kitchenAssignProductId" class="min-h-11 rounded-xl border px-3">
+      <div v-if="canWrite" class="grid gap-2 rounded-xl bg-slate-50 p-2.5 sm:grid-cols-3">
+        <select v-model="kitchenAssignProductId" class="min-h-9 rounded-lg border border-slate-300 px-2.5 text-sm">
           <option value="">{{ t('admin.recipes.menuProduct') }}</option>
           <option v-for="p in products" :key="p.id" :value="p.id">{{ p.sku }} — {{ p.name }}</option>
         </select>
-        <select v-model="kitchenAssignStationId" class="min-h-11 rounded-xl border px-3">
+        <select v-model="kitchenAssignStationId" class="min-h-9 rounded-lg border border-slate-300 px-2.5 text-sm">
           <option value="">{{ t('admin.kitchen.noStation') }}</option>
           <option v-for="st in kitchenStations.filter((s) => s.isActive)" :key="st.id" :value="st.id">{{ st.code }} — {{ st.name }}</option>
         </select>
-        <button type="button" class="touch-target rounded-xl bg-slate-900 font-semibold text-white" :disabled="busy" @click="assignKitchenStation">
+        <button type="button" class="min-h-9 rounded-lg bg-slate-900 text-sm font-semibold text-white" :disabled="busy" @click="assignKitchenStation">
           {{ t('admin.kitchen.assign') }}
         </button>
       </div>

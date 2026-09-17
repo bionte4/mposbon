@@ -40,8 +40,9 @@ export class KitchenService {
     private readonly audit: AuditService,
   ) {}
 
-  listStations(storeId: string) {
+  async listStations(storeId: string) {
     const tenant = TenantContext.require();
+    await this.assertStore(storeId);
     return this.prisma.db.kitchenStation.findMany({
       where: {
         tenantId: tenant.id,
@@ -91,12 +92,17 @@ export class KitchenService {
     });
   }
 
-  /** Active KDS tickets grouped by order (Moka-style bump bar). */
+  /** Active KDS tickets for one store (tenant + store isolated). */
   async listActiveTickets(storeId: string, stationId?: string) {
     const tenant = TenantContext.require();
-    const allowed = this.allowedStationIds();
+    await this.assertStore(storeId);
+    const allowed = await this.allowedStationIdsForStore(storeId);
     if (stationId && allowed && !allowed.includes(stationId)) {
-      throw new ForbiddenException('Station not assigned to this user');
+      throw new ForbiddenException('Station not assigned to this user for this store');
+    }
+    // Empty allowed list for KITCHEN with no stations at this store → no tickets
+    if (allowed && allowed.length === 0) {
+      return [];
     }
     const scopedStationId =
       stationId ?? (allowed?.length === 1 ? allowed[0] : undefined);
@@ -109,7 +115,12 @@ export class KitchenService {
     const lines = await this.prisma.db.kitchenOrderLine.findMany({
       where: {
         tenantId: tenant.id,
-        order: { storeId, status: KitchenOrderStatus.OPEN },
+        order: {
+          tenantId: tenant.id,
+          storeId,
+          status: KitchenOrderStatus.OPEN,
+        },
+        station: { storeId, tenantId: tenant.id },
         status: {
           in: [
             KitchenLineStatus.PENDING,
@@ -120,7 +131,7 @@ export class KitchenService {
         ...stationFilter,
       },
       include: {
-        station: { select: { id: true, code: true, name: true } },
+        station: { select: { id: true, code: true, name: true, storeId: true } },
         order: true,
       },
       orderBy: { firedAt: 'asc' },
@@ -130,6 +141,7 @@ export class KitchenService {
       string,
       {
         orderId: string;
+        storeId: string;
         cartClientUuid: string;
         tableLabel: string | null;
         createdAt: Date;
@@ -138,8 +150,12 @@ export class KitchenService {
     >();
 
     for (const line of lines) {
+      if (line.order.storeId !== storeId || line.station.storeId !== storeId) {
+        continue;
+      }
       const bucket = byOrder.get(line.orderId) ?? {
         orderId: line.orderId,
+        storeId: line.order.storeId,
         cartClientUuid: line.order.cartClientUuid,
         tableLabel: line.order.tableLabel,
         createdAt: line.order.createdAt,
@@ -165,6 +181,7 @@ export class KitchenService {
     let order = await this.prisma.db.kitchenOrder.findFirst({
       where: {
         tenantId: tenant.id,
+        storeId: input.storeId,
         cartClientUuid: input.cartClientUuid,
         status: KitchenOrderStatus.OPEN,
       },
@@ -198,6 +215,18 @@ export class KitchenService {
       });
       if (!product?.kitchenStationId) continue;
 
+      // Station must belong to the same store (and tenant) as the POS session.
+      const station = await this.prisma.db.kitchenStation.findFirst({
+        where: {
+          id: product.kitchenStationId,
+          tenantId: tenant.id,
+          storeId: input.storeId,
+          isActive: true,
+        },
+        select: { id: true },
+      });
+      if (!station) continue;
+
       const existing = await this.prisma.db.kitchenOrderLine.findFirst({
         where: {
           tenantId: tenant.id,
@@ -212,7 +241,7 @@ export class KitchenService {
           id: randomUUID(),
           tenantId: tenant.id,
           orderId: order.id,
-          stationId: product.kitchenStationId,
+          stationId: station.id,
           productId: line.productId,
           productName: line.productName,
           quantity: line.quantity,
@@ -310,36 +339,58 @@ export class KitchenService {
   }
 
   /**
-   * null = unrestricted (non-KITCHEN roles, or KITCHEN without assignments).
-   * string[] = only these station IDs.
+   * null = unrestricted (non-KITCHEN roles).
+   * string[] = only these station IDs **at the given store** (may be empty).
    */
-  private allowedStationIds(): string[] | null {
+  private async allowedStationIdsForStore(storeId: string): Promise<string[] | null> {
     const user = AuthContext.current();
     if (!user) return null;
     if (user.role !== 'KITCHEN') return null;
     const ids = user.kitchenStationIds;
-    if (!ids?.length) return null;
-    return ids;
+    if (!ids?.length) return [];
+    const tenant = TenantContext.require();
+    const rows = await this.prisma.db.kitchenStation.findMany({
+      where: {
+        tenantId: tenant.id,
+        storeId,
+        id: { in: ids },
+        isActive: true,
+      },
+      select: { id: true },
+    });
+    return rows.map((r) => r.id);
   }
 
+  /** For station list: restrict KITCHEN users to their assigned stations. */
   private stationScopeWhere(): { id?: { in: string[] } } {
-    const allowed = this.allowedStationIds();
-    return allowed ? { id: { in: allowed } } : {};
+    const user = AuthContext.current();
+    if (!user || user.role !== 'KITCHEN') return {};
+    const ids = user.kitchenStationIds;
+    if (!ids?.length) return { id: { in: [] } };
+    return { id: { in: ids } };
   }
 
   private assertStationAllowed(stationId: string): void {
-    const allowed = this.allowedStationIds();
-    if (allowed && !allowed.includes(stationId)) {
+    const user = AuthContext.current();
+    if (!user || user.role !== 'KITCHEN') return;
+    const ids = user.kitchenStationIds;
+    if (ids?.length && !ids.includes(stationId)) {
       throw new ForbiddenException('Station not assigned to this user');
     }
   }
 
   private async listActiveTicketsUnscoped(storeId: string) {
     const tenant = TenantContext.require();
+    await this.assertStore(storeId);
     const lines = await this.prisma.db.kitchenOrderLine.findMany({
       where: {
         tenantId: tenant.id,
-        order: { storeId, status: KitchenOrderStatus.OPEN },
+        order: {
+          tenantId: tenant.id,
+          storeId,
+          status: KitchenOrderStatus.OPEN,
+        },
+        station: { storeId, tenantId: tenant.id },
         status: {
           in: [
             KitchenLineStatus.PENDING,
@@ -349,13 +400,14 @@ export class KitchenService {
         },
       },
       include: {
-        station: { select: { id: true, code: true, name: true } },
+        station: { select: { id: true, code: true, name: true, storeId: true } },
         order: true,
       },
       orderBy: { firedAt: 'asc' },
     });
     const byOrder = new Map<string, {
       orderId: string;
+      storeId: string;
       cartClientUuid: string;
       tableLabel: string | null;
       createdAt: Date;
@@ -364,6 +416,7 @@ export class KitchenService {
     for (const line of lines) {
       const bucket = byOrder.get(line.orderId) ?? {
         orderId: line.orderId,
+        storeId: line.order.storeId,
         cartClientUuid: line.order.cartClientUuid,
         tableLabel: line.order.tableLabel,
         createdAt: line.order.createdAt,

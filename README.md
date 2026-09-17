@@ -2,21 +2,23 @@
 
 Multi-tenant Point of Sale (POS) platform for retail & F&B — cloud SaaS or on-premises (edge / mini-PC).
 
-Decoupled **Vue 3 SPA** + **NestJS API** + **PostgreSQL** (Row-Level Security). Offline-first cashier via IndexedDB/PWA, integer money (IDR sen), RBAC, shifts/Z-report, HRIS dasar, purchasing/receiving, and Docker Compose for one-command deploy.
+Decoupled **Vue 3 SPA** + **NestJS API** + **PostgreSQL** (Row-Level Security). Offline-first cashier via IndexedDB/PWA, integer money (IDR), RBAC, shifts/Z-report, HRIS dasar, purchasing/receiving, kitchen/KDS, and Docker Compose for one-command deploy.
+
+**Operator guide (Bahasa Indonesia):** [docs/MANUAL.md](docs/MANUAL.md)
 
 ## Features
 
 | Area | Capabilities |
 |------|----------------|
-| **POS** | Touch-first cart, hold/resume, modifiers, split tender, cash / card / QRIS (dynamic EMVCo), ESC/POS receipt, barcode scanner |
-| **Offline** | Dexie/IndexedDB cart & sale queue, background sync, conflict-aware stock |
+| **POS** | Touch-first cart, hold/resume, modifiers/variants, tables/guests, split tender, cash / card / QRIS (dynamic EMVCo), ESC/POS receipt, barcode scanner |
+| **Kitchen** | KDS stations, fire from POS, bump board, kitchen/bar RBAC |
+| **Offline** | Dexie/IndexedDB cart & sale queue, background sync, edge/on-prem hub sync |
 | **Shift** | Clock-in/out, cash drop / mid-count, X-Report & Z-Report archive |
-| **Inventory** | Per-store stock & price override, inter-store transfer |
-| **Purchasing** | Suppliers, purchase orders, partial goods receipt → store stock |
+| **Inventory** | Per-store stock & price, in-transit transfer, PO/receiving, stock count, recipes/BOM |
 | **Promos** | Voucher % (bps) or fixed amount; scope ALL/category/product |
 | **Payments** | Local dynamic QRIS, Midtrans/Xendit QRIS charge + webhook/poll |
 | **Loyalty** | Earn points on sale + redeem points for discount |
-| **Admin** | Catalog, categories, modifiers, staff/PIN, QRIS payload per store, audit trail |
+| **Admin** | 5 hubs (catalog / inventory / outlet / team / system), store profile & QRIS, audit, light GL |
 | **HRIS** | Employees, attendance, work shifts, payroll draft (OT + PPh 21 helpers) |
 | **Dashboard** | Gross/net sales, AOV, top products, shift discrepancy widgets |
 | **Tenancy** | Shared DB + `tenant_id` + Postgres RLS; cloud multi-tenant or locked on-prem tenant |
@@ -75,6 +77,10 @@ After first boot (`RUN_DB_SEED=true`), tenant slug defaults to `onprem-store`.
 | Manager | `manager@bonpos.local` | `1234` |
 | Supervisor | `supervisor@bonpos.local` | `1234` |
 | Cashier | `cashier@bonpos.local` | `1234` |
+| Kitchen | `kitchen@bonpos.local` | `1234` |
+| Bar | `bar@bonpos.local` | `1234` |
+
+Operator walkthrough: **[docs/MANUAL.md](docs/MANUAL.md)**.
 
 Change `SEED_SUPERVISOR_PIN` / `JWT_SECRET` before any real deployment.
 
@@ -97,7 +103,8 @@ npm run dev:web    # Vite :5173
 
 ```
 ├── backend/           # NestJS API + Prisma schema/migrations
-├── frontend/          # Vue SPA (POS, admin, dashboard, HRIS)
+├── frontend/          # Vue SPA (POS, admin, dashboard, HRIS, KDS)
+├── docs/              # Operator manual (MANUAL.md)
 ├── docker/            # Gateway nginx + Postgres init (app role)
 ├── docker-compose.yml
 ├── docker-compose.desktop.yml   # Mac / Desktop-safe host ports

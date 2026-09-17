@@ -1,0 +1,257 @@
+# Panduan Pengguna BonPOS
+
+Manual operasional untuk kasir, dapur, supervisor, manager, dan admin toko.
+Untuk instalasi teknis (Docker, env, API), lihat [README.md](../README.md).
+
+---
+
+## 1. Ringkasan
+
+BonPOS adalah sistem Point of Sale multi-outlet untuk retail & F&B:
+
+- **Kasir (POS)** — keranjang, meja, bayar (tunai / QRIS / split), struk
+- **Dapur (KDS)** — tampilan order & bump status
+- **Admin toko** — katalog, inventori, outlet, staf, jurnal ringan
+- **Dashboard & laporan** — penjualan, shift, X/Z-Report
+- **HRIS** — karyawan, absensi, draft payroll (Manager+)
+
+Mata uang disimpan sebagai **bilangan bulat Rupiah** (bukan desimal). Di Admin, isi harga sebagai `15000` untuk **Rp 15.000**.
+
+---
+
+## 2. Akun demo (setelah seed)
+
+Tenant default: `onprem-store`. PIN demo: `1234` (ganti di production).
+
+| Peran | Email | Akses utama |
+|--------|--------|-------------|
+| Tenant Admin | `admin@bonpos.local` | Semua menu |
+| Manager | `manager@bonpos.local` | POS, Admin, HRIS, Dashboard, Laporan |
+| Supervisor | `supervisor@bonpos.local` | POS, inventori/outlet Admin (terbatas), tanpa Tim/GL |
+| Kasir | `cashier@bonpos.local` | POS saja |
+| Dapur | `kitchen@bonpos.local` | KDS saja |
+| Bar | `bar@bonpos.local` | KDS (stasiun bar) |
+
+---
+
+## 3. Login & navigasi
+
+1. Buka aplikasi (contoh Docker Desktop: **http://localhost:9088**).
+2. Masukkan **email** + **PIN**.
+3. Pilih **Bahasa** (ID / EN) di bilah atas.
+4. Pilih **Toko** aktif di dropdown (multi-outlet).
+5. Menu yang tampil mengikuti peran Anda:
+
+| Menu | Siapa |
+|------|--------|
+| POS | Kasir, Supervisor, Manager, Admin |
+| Dapur (KDS) | Kitchen/Bar, Supervisor+, Manager+ |
+| Dashboard | yang punya `dashboard.read` |
+| Laporan | yang punya akses Z-Report |
+| HRIS | Manager+ (kasir tidak bisa) |
+| Admin | `admin.access` (Supervisor terbatas) |
+| Runtime | status teknis |
+
+Keluar: tombol **Logout**.
+
+---
+
+## 4. POS — alur kasir
+
+### 4.1 Buka shift
+
+1. Masuk menu **POS**.
+2. Mulai shift / clock-in bila diminta (kas awal laci).
+3. Pastikan toko di dropdown sudah benar.
+
+### 4.2 Tambah item
+
+1. Ketuk produk di katalog (atau scan barcode).
+2. Pilih **modifier** / **varian** bila ada.
+3. Atur qty di keranjang.
+4. Opsional: lampirkan pelanggan, promo/voucher, poin loyalty.
+
+### 4.3 Meja & tamu (F&B)
+
+1. Buka peta/daftar **meja** (Table Floor).
+2. Pilih meja → status AVAILABLE / OCCUPIED / BILLING.
+3. Item bisa diberi **nomor tamu** (guest) untuk bayar per orang.
+
+### 4.4 Parkir order
+
+- **Park** menyimpan keranjang untuk dilanjutkan nanti.
+- **Resume** membuka kembali order yang diparkir.
+
+### 4.5 Bayar (checkout)
+
+1. Ketuk bayar / checkout.
+2. Pilih metode:
+   - **Tunai** — masukkan uang diterima; sistem hitung kembalian
+   - **QRIS** — tampil QR (payload toko atau Midtrans/Xendit)
+   - **Split** — kombinasi tunai + non-tunai
+   - **Kartu** — sebagai jenis tender (belum terhubung EDC gateway)
+3. Opsional: tip.
+4. Konfirmasi → cetak struk bila printer siap.
+
+### 4.6 Aksi sensitif (perlu PIN supervisor)
+
+- Void transaksi (saat ini **seluruh sale**, bukan per baris)
+- Diskon manual
+- Buka laci kasir paksa
+
+Minta Supervisor/Manager memasukkan PIN.
+
+### 4.7 Cash drop & tutup shift
+
+1. **Cash drop / mid-count** — catat setoran di tengah shift.
+2. **X-Report** — ringkasan tanpa menutup shift.
+3. **Z-Report** — tutup shift + rekonsiliasi laci (kas aktual vs sistem).
+
+---
+
+## 5. Dapur (KDS)
+
+1. Login sebagai `kitchen@…` atau `bar@…` (atau Manager mengawasi).
+2. Buka **Dapur (KDS)**.
+3. Ticket muncul saat kasir **fire** item ke stasiun.
+4. Tap / bump untuk mengubah status (siap → selesai).
+5. Stasiun dibatasi per user (User ↔ Kitchen Station di Admin → Tim / Outlet).
+
+---
+
+## 6. Administrasi toko
+
+Buka **Admin** → URL `/admin/catalog` (lima hub).
+
+| Hub | Isi | Siapa |
+|-----|-----|--------|
+| **Katalog** | Produk, kategori, modifier, promo, varian | Manager+ tulis |
+| **Inventori** | Stok toko, transfer, opname, supplier, PO, resep | Supervisor+ inventori; PO butuh purchasing |
+| **Outlet** | Toko (profil/QRIS/struk), meja, stasiun dapur | Supervisor+ |
+| **Tim** | Staf POS, role, PIN, assign stasiun | Manager+ |
+| **Sistem** | Jurnal/GL, edge sync, audit | Manager+ finance |
+
+Deep link contoh: `/admin/inventory?tab=transfer`.
+
+### 6.1 Produk & harga
+
+1. Hub **Katalog** → tab Produk.
+2. Isi nama, SKU, barcode, kategori, **harga Rupiah bulat**, pajak (bps; 1100 = 11%), stok, tipe (RETAIL/MENU/INGREDIENT), stasiun dapur.
+3. Expand produk → kelola **varian** (sku, nama, harga).
+4. Modifier: buat grup (min/max pilih) + opsi dengan delta harga.
+
+### 6.2 Toko / QRIS / struk
+
+1. Hub **Outlet** → Toko.
+2. Tambah toko (kode + nama) atau edit: alamat, telepon, zona waktu, header/footer struk, aktif.
+3. Tempel **payload QRIS statis** (EMVCo MPM dari bank/PSP, biasanya panjang). Saat checkout, BonPOS membentuk QR dinamis dengan nominal.
+
+### 6.3 Stok toko & transfer
+
+1. **Stok toko** — pilih outlet, set qty / harga override per produk.
+2. **Transfer** — tambah beberapa baris produk → kirim (in-transit) → terima di tujuan → atau batalkan.
+3. Status: `DRAFT` → `IN_TRANSIT` → `COMPLETED` / `CANCELLED`.
+
+### 6.4 Opname, supplier, PO, resep
+
+- **Opname** — mulai sesi, isi qty hitung, selesai (variance) atau batalkan.
+- **Supplier** — buat/edit kontak; nonaktifkan tanpa hapus riwayat.
+- **Pembelian** — buat PO multi-baris → konfirmasi → terima barang (partial OK).
+- **Resep / BOM** — tautkan bahan (INGREDIENT) + qty + biaya; preview COGS.
+
+### 6.5 Meja & stasiun dapur
+
+- Area + meja (kode, kapasitas, aktif).
+- Stasiun dapur per toko; assign produk MENU ke stasiun; assign staf kitchen/bar ke stasiun.
+
+### 6.6 Staf
+
+- Buat user: email, nama, role, PIN 4–8 digit.
+- Role tidak boleh di atas rank Anda sendiri.
+- Kitchen: centang stasiun yang boleh dilihat di KDS.
+
+---
+
+## 7. Dashboard & laporan
+
+### Dashboard
+
+- Gross / Net sales, jumlah transaksi, AOV, produk terlaris.
+- Widget shift & selisih kas (sesuai role).
+
+### Laporan
+
+- Arsip X/Z-Report, cetak ulang, ekspor CSV (sesuai izin).
+
+---
+
+## 8. HRIS (Manager+)
+
+Kasir **tidak** punya akses menu ini.
+
+1. **Karyawan** — data pegawai; opsional taut ke user POS.
+2. **Absensi** — clock-in/out harian.
+3. **Shift kerja** — jadwal.
+4. **Payroll draft** — hitung OT + helper PPh 21 (bukan payroll production penuh).
+
+---
+
+## 9. Offline & sinkronisasi
+
+- Keranjang & antrian penjualan disimpan di **IndexedDB** (Dexie).
+- Saat offline, kasir tetap bisa jualan; saat online, antrean tersinkron.
+- Mode **on-prem / edge sync** (compose onprem): sinkron hub pusat bila koneksi tersedia (lihat Admin → Sistem → Edge sync).
+- Pasang sebagai **PWA** dari browser untuk pengalaman seperti app.
+
+---
+
+## 10. Perangkat keras
+
+| Perangkat | Cara kerja |
+|-----------|------------|
+| Printer thermal | ESC/POS via Web Serial → WebUSB → fallback hex preview |
+| Laci kas | Perintah `ESC p` (buka paksa butuh PIN) |
+| Scanner barcode | Mode keyboard wedge (HID) |
+
+Pastikan browser mengizinkan akses serial/USB. Printer Bluetooth native (seperti app Moka) belum didukung di browser murni.
+
+---
+
+## 11. Peran & izin (ringkas)
+
+| Aksi | Kasir | Supervisor | Manager+ |
+|------|-------|------------|----------|
+| Jual di POS | ✓ | ✓ | ✓ |
+| Void / diskon (PIN) | minta atasan | ✓ | ✓ |
+| Opname / transfer / meja | — | ✓ | ✓ |
+| Katalog / promo tulis | — | — | ✓ |
+| Supplier / PO tulis | — | — | ✓ |
+| Staf / GL / audit | — | — | ✓ |
+| HRIS | — | — | ✓ |
+| KDS bump | — | ✓ | ✓ |
+| Kitchen-only login | — | — | (akun KITCHEN) |
+
+---
+
+## 12. Tips operasional
+
+1. **Harga Admin** = Rupiah bulat (`25000` = Rp 25.000), lihat petunjuk di bawah field uang.
+2. Login ulang setelah perubahan role/izin agar session memuat permission baru.
+3. Selalu tutup shift dengan **Z-Report** di akhir hari.
+4. Uji QRIS di toko cabang sebelum go-live (payload terlalu pendek akan ditolak).
+5. Void saat ini membatalkan **seluruh** transaksi — koreksi item lebih aman sebelum bayar.
+6. Untuk demo dapur: login `kitchen@bonpos.local`, buka KDS; di POS fire menu yang sudah di-assign stasiun.
+
+---
+
+## 13. Bantuan teknis singkat
+
+| Masalah | Cek |
+|---------|-----|
+| Admin kosong / URL `/catalog` | Buka `/admin/catalog` (sudah ada redirect) |
+| KDS 403 | User harus punya `kitchen.display`; stasiun di-assign |
+| QRIS tidak muncul | Payload toko + izin bayar |
+| Stok 0 di cabang | Set stok di Inventori → Stok toko (seed sering isi MAIN saja) |
+| Tidak bisa masuk Admin | Role tanpa `admin.access` |
+
+Dokumentasi deploy & env: [README.md](../README.md).
